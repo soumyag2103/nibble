@@ -1,0 +1,26 @@
+{
+  "date": "2026-05-28",
+  "meals": {
+    "cs1": {
+      "food": "Peaches",
+      "eaten": false,
+      "reaction": "Disliked",
+      "notes": "",
+      "savedAt": "2026-05-28T16:00:37.844Z"
+    },
+    "lunch": {
+      "food": "ragi porridge",
+      "eaten": true,
+      "reaction": "Disliked",
+      "notes": "",
+      "savedAt": "2026-05-28T15:55:37.788Z"
+    },
+    "cs2": {
+      "food": "olives",
+      "eaten": true,
+      "reaction": "Disliked",
+      "notes": "",
+      "savedAt": "2026-05-28T15:54:30.817Z"
+    }
+  }
+}

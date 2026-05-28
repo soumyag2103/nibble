@@ -1,0 +1,22 @@
+{
+  "2026-05-29": {
+    "cs2": {
+      "food": "Olive and Avocado Mash",
+      "source": "scheduled",
+      "dayNumber": 4,
+      "daysRemaining": 1
+    },
+    "cs1": {
+      "food": "Avocado Delight",
+      "source": "scheduled",
+      "dayNumber": 4,
+      "daysRemaining": 1
+    },
+    "lunch": {
+      "food": "Ragi Apple Delight",
+      "source": "scheduled",
+      "dayNumber": null,
+      "daysRemaining": null
+    }
+  }
+}

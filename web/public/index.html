@@ -1,0 +1,1363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>Saahiti — Firsts</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --peach:   #FF8A65;
+      --cream:   #FFF8F0;
+      --sage:    #81C784;
+      --peach-d: #E57648;
+      --sage-d:  #5fa362;
+    }
+    * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+    body { background: var(--cream); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+
+    /* Cards */
+    .card { background: white; border-radius: 20px; box-shadow: 0 2px 16px rgba(0,0,0,0.07); }
+
+    /* Bottom nav */
+    #bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: white;
+      border-top: 1px solid #f0e8e0; display: flex; z-index: 50;
+      padding-bottom: env(safe-area-inset-bottom, 0); }
+    .nav-btn { flex: 1; display: flex; flex-direction: column; align-items: center;
+      padding: 10px 4px 8px; border: none; background: none; cursor: pointer;
+      color: #b0a090; font-size: 10px; font-weight: 600; gap: 3px; transition: color 0.15s; }
+    .nav-btn .nav-icon { font-size: 22px; line-height: 1; }
+    .nav-btn.active { color: var(--peach); }
+
+    /* Tab panels */
+    .tab-panel { display: none !important; }
+    .tab-panel.active { display: block !important; }
+    #tab-chat.active { display: flex !important; }
+
+    /* Reaction buttons */
+    .reaction-btn { transition: all 0.15s ease; border: 2px solid transparent; border-radius: 12px; }
+    .reaction-btn:active { transform: scale(0.92); }
+    .reaction-btn.active { transform: scale(1.08); }
+    .reaction-btn.active.loved    { background: #FEF9C3; border-color: #FACC15; }
+    .reaction-btn.active.liked    { background: #DCFCE7; border-color: #4ADE80; }
+    .reaction-btn.active.neutral  { background: #F1F5F9; border-color: #94A3B8; }
+    .reaction-btn.active.disliked { background: #FEE2E2; border-color: #F87171; }
+
+    /* Eaten toggle */
+    .eaten-toggle { width: 44px; height: 26px; border-radius: 13px; border: none; cursor: pointer;
+      background: #e2e8f0; transition: background 0.2s; position: relative; }
+    .eaten-toggle::after { content:''; position: absolute; width: 20px; height: 20px;
+      border-radius: 50%; background: white; top: 3px; left: 3px;
+      transition: transform 0.2s; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
+    .eaten-toggle.on { background: var(--sage); }
+    .eaten-toggle.on::after { transform: translateX(18px); }
+
+    /* Slot headers */
+    .cs1-header  { background: linear-gradient(135deg, #FEF3C7, #FDE68A); }
+    .lunch-header{ background: linear-gradient(135deg, #DCFCE7, #BBF7D0); }
+    .cs2-header  { background: linear-gradient(135deg, #FCE7F3, #FBCFE8); }
+
+    /* Chat bubbles */
+    .bubble-user  { background: var(--peach); color: white; border-radius: 18px 18px 4px 18px; align-self: flex-end; }
+    .bubble-agent { background: white; color: #2d2d2d; border-radius: 18px 18px 18px 4px; align-self: flex-start; box-shadow: 0 1px 8px rgba(0,0,0,0.08); }
+    .chat-messages { display: flex; flex-direction: column; gap: 10px; padding: 12px; overflow-y: auto; height: calc(100vh - 280px); }
+    .bubble { max-width: 82%; padding: 10px 14px; font-size: 14px; line-height: 1.55; white-space: pre-wrap; }
+
+    /* Agent pills */
+    .agent-pill { padding: 6px 14px; border-radius: 20px; border: 2px solid transparent;
+      font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+    .agent-pill.gordon  { background: #FEF3C7; color: #92400E; }
+    .agent-pill.gordon.active  { border-color: #F59E0B; background: #FDE68A; }
+    .agent-pill.meredith{ background: #EDE9FE; color: #5B21B6; }
+    .agent-pill.meredith.active{ border-color: #8B5CF6; background: #DDD6FE; }
+    .agent-pill.bailey  { background: #DBEAFE; color: #1E3A8A; }
+    .agent-pill.bailey.active  { border-color: #3B82F6; background: #BFDBFE; }
+
+    /* Loading dots */
+    .loading-dots::after { content:''; animation: dots 1.2s infinite; }
+    @keyframes dots { 0%{content:'.'} 33%{content:'..'} 66%{content:'...'} 100%{content:'.'} }
+
+    /* Milestone badges */
+    .badge-within  { background: #DCFCE7; color: #166534; }
+    .badge-ahead   { background: #FEF9C3; color: #854D0E; }
+    .badge-sig     { background: #FFE4E6; color: #881337; }
+    .badge-achieved{ background: var(--sage); color: white; }
+
+    /* Progress bars */
+    .prog-bar { height: 8px; border-radius: 4px; background: #f0e8e0; overflow: hidden; }
+    .prog-fill { height: 100%; border-radius: 4px; transition: width 0.8s ease; }
+
+    /* Reaction pill */
+    .pill-loved   { background:#FEF9C3; color:#854D0E; }
+    .pill-liked   { background:#DCFCE7; color:#166534; }
+    .pill-neutral { background:#F1F5F9; color:#475569; }
+    .pill-disliked{ background:#FEE2E2; color:#991B1B; }
+    .pill-none    { background:#F8FAFC; color:#94A3B8; }
+
+    /* Slide animations */
+    .slide-down { animation: slideDown 0.25s ease; }
+    @keyframes slideDown { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
+
+    /* Food roadmap */
+    .food-tried   { opacity: 0.55; }
+    .food-current { border-left: 3px solid var(--peach); }
+    .month-badge  { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; }
+
+    /* Variant card */
+    .variant-card { animation: slideDown 0.2s ease; }
+
+    /* Week grid day */
+    .day-cell { min-width: 0; }
+
+    textarea:focus, input:focus { outline: none; }
+    input[type=text], textarea { -webkit-appearance: none; }
+
+    /* Onboarding & Settings overlays */
+    .overlay-fullscreen { position:fixed; inset:0; z-index:100; background:var(--cream);
+      display:flex; flex-direction:column; overflow-y:auto; }
+    .overlay-fullscreen.hidden { display:none !important; }
+
+    /* Step dots */
+    .step-dot { width:8px; height:8px; border-radius:50%; background:#e2e8f0; transition:background 0.2s; }
+    .step-dot.active { background:var(--peach); }
+
+    /* Option buttons (gender, dietary) */
+    .opt-btn { flex:1; padding:14px 8px; border-radius:16px; border:2px solid #e5e7eb;
+      background:white; font-size:14px; font-weight:600; cursor:pointer; text-align:center;
+      color:#374151; transition:all 0.15s; }
+    .opt-btn.selected { border-color:var(--peach); background:#FFF0EB; color:var(--peach-d); }
+
+    /* Slot editor row */
+    .slot-row { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+    .slot-row input[type=text] { flex:1; background:#f9fafb; border:1px solid #e5e7eb; border-radius:10px; padding:8px 10px; font-size:13px; }
+    .slot-row input[type=time] { width:90px; background:#f9fafb; border:1px solid #e5e7eb; border-radius:10px; padding:8px 8px; font-size:13px; }
+    .slot-row .del-btn { width:32px; height:32px; border-radius:8px; border:none; background:#fee2e2; color:#dc2626; cursor:pointer; font-size:16px; flex-shrink:0; }
+
+    /* Gear button */
+    #settings-btn { background:none; border:none; cursor:pointer; font-size:20px; padding:4px; }
+  </style>
+</head>
+<body class="min-h-screen pb-24">
+
+  <!-- ── ONBOARDING OVERLAY ───────────────────────────────────── -->
+  <div id="onboarding-overlay" class="overlay-fullscreen hidden">
+    <div class="max-w-md mx-auto w-full flex flex-col flex-1 px-6 py-8">
+      <!-- Step dots -->
+      <div class="flex justify-center gap-2 mb-8" id="onb-dots"></div>
+      <!-- Step content -->
+      <div id="onb-body" class="flex-1"></div>
+      <!-- Navigation -->
+      <div class="flex gap-3 mt-8">
+        <button id="onb-back" onclick="onbBack()" class="px-6 py-3 rounded-2xl border-2 border-gray-200 text-gray-500 font-semibold text-sm">Back</button>
+        <button id="onb-next" onclick="onbNext()" class="flex-1 py-3 rounded-2xl text-white font-bold text-sm" style="background:var(--peach)">Next</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SETTINGS OVERLAY ───────────────────────────────────────── -->
+  <div id="settings-overlay" class="overlay-fullscreen hidden">
+    <div class="max-w-md mx-auto w-full px-6 py-6">
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="text-lg font-bold" style="color:var(--peach-d)">Settings</h2>
+        <button onclick="closeSettings()" class="text-2xl text-gray-400 hover:text-gray-600">×</button>
+      </div>
+
+      <!-- Dietary preference -->
+      <div class="mb-6">
+        <p class="text-sm font-bold text-gray-600 mb-3">Dietary preference</p>
+        <div class="flex gap-3" id="settings-dietary"></div>
+      </div>
+
+      <!-- Meal slots -->
+      <div class="mb-6">
+        <p class="text-sm font-bold text-gray-600 mb-3">Meal slots</p>
+        <div id="settings-slots"></div>
+        <button onclick="settingsAddSlot()" class="text-sm text-orange-500 font-semibold mt-1">+ Add slot</button>
+      </div>
+
+      <p id="settings-error" class="text-xs text-red-500 mb-3 hidden"></p>
+      <button onclick="saveSettings()" class="w-full py-3 rounded-2xl text-white font-bold" style="background:var(--peach)">Save changes</button>
+    </div>
+  </div>
+
+  <!-- ── HEADER ─────────────────────────────────────────────────── -->
+  <div class="sticky top-0 z-20 bg-white/95 backdrop-blur-md border-b border-orange-100 px-4 py-3">
+    <div class="max-w-lg mx-auto flex items-center justify-between">
+      <div>
+        <h1 id="header-title" class="text-base font-bold" style="color:var(--peach-d)">🍼 Firsts</h1>
+        <p id="header-age" class="text-xs text-gray-400">Loading...</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <div id="header-date" class="text-right text-xs text-gray-400"></div>
+        <button id="settings-btn" onclick="openSettings()" title="Settings">⚙️</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── TAB: TODAY ─────────────────────────────────────────────── -->
+  <div id="tab-today" class="tab-panel active max-w-lg mx-auto px-4 pt-4 space-y-4">
+
+    <!-- Meal slots: CS1, Lunch, CS2 -->
+    <div id="meal-slots"></div>
+
+    <!-- Week strip -->
+    <div class="card p-4">
+      <h2 class="text-sm font-bold text-gray-500 mb-3">PAST 7 DAYS</h2>
+      <div id="week-strip" class="grid grid-cols-7 gap-1"></div>
+    </div>
+
+  </div>
+
+  <!-- ── TAB: CHAT ──────────────────────────────────────────────── -->
+  <div id="tab-chat" class="tab-panel max-w-lg mx-auto flex flex-col" style="height: calc(100vh - 112px)">
+
+    <!-- Agent selector -->
+    <div class="bg-white border-b border-orange-100 px-4 py-3 flex gap-2">
+      <button class="agent-pill gordon active" onclick="selectAgent('gordon')">🍳 Gordon</button>
+      <button class="agent-pill meredith" onclick="selectAgent('meredith')">📋 Meredith</button>
+      <button class="agent-pill bailey" onclick="selectAgent('bailey')">🏥 Bailey</button>
+      <button class="ml-auto text-xs text-gray-400 font-medium" onclick="clearChat()">Clear</button>
+    </div>
+
+    <!-- Agent description -->
+    <div id="agent-desc" class="px-4 py-2 text-xs text-gray-400 bg-orange-50 border-b border-orange-100"></div>
+
+    <!-- Messages -->
+    <div id="chat-messages" class="chat-messages flex-1"></div>
+
+    <!-- Input -->
+    <div class="bg-white border-t border-orange-100 px-4 py-3 flex gap-2">
+      <input id="chat-input" type="text" placeholder="Ask anything…"
+        class="flex-1 bg-gray-50 rounded-full px-4 py-2 text-sm border border-gray-100"
+        onkeydown="if(event.key==='Enter')sendChat()" />
+      <button onclick="sendChat()" class="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold"
+        style="background:var(--peach)" id="chat-send-btn">→</button>
+    </div>
+  </div>
+
+  <!-- ── TAB: PLANS ─────────────────────────────────────────────── -->
+  <div id="tab-plans" class="tab-panel max-w-lg mx-auto px-4 pt-4">
+
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-base font-bold" style="color:var(--peach-d)">Food Roadmap</h2>
+      <div id="plans-age" class="text-xs text-gray-400"></div>
+    </div>
+
+    <!-- Month filter -->
+    <div id="month-filter" class="flex gap-2 overflow-x-auto pb-2 mb-4"></div>
+
+    <!-- Food cards -->
+    <div id="roadmap-cards" class="space-y-3 pb-4"></div>
+
+  </div>
+
+  <!-- ── TAB: MILESTONES ────────────────────────────────────────── -->
+  <div id="tab-milestones" class="tab-panel max-w-lg mx-auto px-4 pt-4">
+
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-base font-bold" style="color:var(--peach-d)">Milestones</h2>
+      <button onclick="openMilestoneForm()" class="text-xs font-semibold px-3 py-1.5 rounded-full text-white"
+        style="background:var(--peach)">+ Log new</button>
+    </div>
+
+    <!-- Summary strip -->
+    <div class="card p-4 mb-4 flex gap-4">
+      <div class="text-center flex-1">
+        <div id="ms-achieved-count" class="text-2xl font-bold" style="color:var(--peach)">—</div>
+        <div class="text-xs text-gray-400">Achieved</div>
+      </div>
+      <div class="text-center flex-1">
+        <div id="ms-ahead-count" class="text-2xl font-bold text-amber-500">—</div>
+        <div class="text-xs text-gray-400">Ahead</div>
+      </div>
+      <div class="text-center flex-1">
+        <div id="ms-sig-count" class="text-2xl font-bold text-rose-500">—</div>
+        <div class="text-xs text-gray-400">Significantly ahead</div>
+      </div>
+    </div>
+
+    <!-- Achieved list -->
+    <div class="mb-4">
+      <h3 class="text-xs font-bold text-gray-400 mb-2">ACHIEVED</h3>
+      <div id="ms-achieved-list" class="space-y-2"></div>
+    </div>
+
+    <!-- Current month checkable -->
+    <div class="mb-4">
+      <h3 class="text-xs font-bold text-gray-400 mb-2" id="ms-current-heading"></h3>
+      <div id="ms-current-list" class="space-y-2"></div>
+    </div>
+
+    <!-- Upcoming preview -->
+    <div class="mb-4">
+      <h3 class="text-xs font-bold text-gray-400 mb-2" id="ms-upcoming-heading"></h3>
+      <div id="ms-upcoming-list" class="space-y-2"></div>
+    </div>
+
+    <!-- Log form (hidden) -->
+    <div id="ms-form" class="hidden card p-4 mb-4 slide-down">
+      <h3 class="text-sm font-bold mb-1">What did Saahiti do?</h3>
+      <p class="text-xs text-gray-400 mb-3">Describe it in your own words — Meredith will classify it.</p>
+      <textarea id="ms-text"
+        placeholder="e.g. She waved bye-bye when grandma left today…"
+        class="w-full bg-gray-50 rounded-xl px-3 py-2 text-sm border border-gray-100 resize-none"
+        rows="3"></textarea>
+      <div class="flex gap-2 mt-3">
+        <button onclick="analyzeMilestone()" id="ms-analyze-btn"
+          class="flex-1 py-2 rounded-xl text-white text-sm font-semibold" style="background:var(--peach)">
+          Analyze →
+        </button>
+        <button onclick="closeMilestoneForm()" class="py-2 px-4 rounded-xl bg-gray-100 text-gray-600 text-sm font-semibold">Cancel</button>
+      </div>
+      <div id="ms-analysis-result" class="hidden mt-3"></div>
+    </div>
+
+  </div>
+
+  <!-- ── TAB: PROGRESS ─────────────────────────────────────────── -->
+  <div id="tab-progress" class="tab-panel max-w-lg mx-auto px-4 pt-4 pb-4 space-y-4">
+
+    <!-- Stats row -->
+    <div class="grid grid-cols-3 gap-3">
+      <div class="card p-3 text-center">
+        <div id="prog-days" class="text-2xl font-bold" style="color:var(--peach)">—</div>
+        <div class="text-xs text-gray-400 mt-1">Days on solids</div>
+      </div>
+      <div class="card p-3 text-center">
+        <div id="prog-foods" class="text-2xl font-bold" style="color:var(--sage-d)">—</div>
+        <div class="text-xs text-gray-400 mt-1">Foods tried</div>
+      </div>
+      <div class="card p-3 text-center">
+        <div id="prog-ms" class="text-2xl font-bold text-purple-500">—</div>
+        <div class="text-xs text-gray-400 mt-1">Milestones</div>
+      </div>
+    </div>
+
+    <!-- Reactions breakdown -->
+    <div class="card p-4">
+      <h3 class="text-sm font-bold text-gray-600 mb-3">Reactions (last 14 days)</h3>
+      <div id="reactions-chart" class="space-y-2"></div>
+    </div>
+
+    <!-- Foods tried list -->
+    <div class="card p-4">
+      <h3 class="text-sm font-bold text-gray-600 mb-3">Foods tried so far</h3>
+      <div id="foods-list" class="flex flex-wrap gap-2"></div>
+    </div>
+
+    <!-- Milestone breakdown -->
+    <div class="card p-4">
+      <h3 class="text-sm font-bold text-gray-600 mb-3">Milestone summary</h3>
+      <div id="ms-progress-list" class="space-y-2"></div>
+    </div>
+
+  </div>
+
+  <!-- ── BOTTOM NAV ─────────────────────────────────────────────── -->
+  <nav id="bottom-nav">
+    <button class="nav-btn active" data-tab="today" onclick="switchTab('today', this)">
+      <span class="nav-icon">🍼</span><span>Today</span>
+    </button>
+    <button class="nav-btn" data-tab="chat" onclick="switchTab('chat', this)">
+      <span class="nav-icon">💬</span><span>Chat</span>
+    </button>
+    <button class="nav-btn" data-tab="plans" onclick="switchTab('plans', this)">
+      <span class="nav-icon">📅</span><span>Plans</span>
+    </button>
+    <button class="nav-btn" data-tab="milestones" onclick="switchTab('milestones', this)">
+      <span class="nav-icon">⭐</span><span>Milestones</span>
+    </button>
+    <button class="nav-btn" data-tab="progress" onclick="switchTab('progress', this)">
+      <span class="nav-icon">📊</span><span>Progress</span>
+    </button>
+  </nav>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+let appProfile    = null;
+let todayLog      = { meals: {} };
+let todaySuggest  = {};
+let slotOverrides = {};
+let knownFoods    = [];
+let currentAgent  = 'gordon';
+let chatHistory   = [];
+let roadmapData   = null;
+let milestonesData  = null;
+let achievementsData = [];
+let tabLoaded = { today: false, chat: false, plans: false, milestones: false, progress: false };
+
+const AGENT_META = {
+  gordon:   { icon:'🍳', name:'Gordon', desc:'Food expert — meal plans, what to feed next, reactions and variants', color:'#F59E0B' },
+  meredith: { icon:'📋', name:'Meredith', desc:'Developmental tracker — milestones, benchmarks, what to expect next', color:'#8B5CF6' },
+  bailey:   { icon:'🏥', name:'Bailey', desc:'Doctor appointment organizer — questions queue, pre-visit briefings', color:'#3B82F6' },
+};
+
+const HEADER_CLASSES = ['cs1-header','lunch-header','cs2-header'];
+const SLOT_EMOJIS    = ['🌤️','☀️','🌸','🌙','🌟'];
+let SLOT_META = {};
+
+function buildSlotMeta(slots) {
+  SLOT_META = {};
+  slots.forEach((s, i) => {
+    SLOT_META[s.id] = {
+      label: s.label,
+      subLabel: s.time,
+      headerClass: HEADER_CLASSES[i % HEADER_CLASSES.length],
+      emoji: SLOT_EMOJIS[i % SLOT_EMOJIS.length],
+      color: ['#D97706','#16A34A','#DB2777','#7C3AED','#0369A1'][i % 5],
+    };
+  });
+  // Reset per-slot state to match new profile
+  todaySuggest  = Object.fromEntries(slots.map(s => [s.id, { food:'', source:'gordon' }]));
+  slotOverrides = Object.fromEntries(slots.map(s => [s.id, false]));
+  todayLog      = { meals: Object.fromEntries(slots.map(s => [s.id, {}])) };
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+async function init() {
+  const profileResp = await fetch('/api/profile').then(r => r.json());
+  if (!profileResp.exists) {
+    showOnboarding();
+    return;
+  }
+  await initWithProfile(profileResp.profile);
+}
+
+async function initWithProfile(profile) {
+  appProfile = profile;
+  buildSlotMeta(profile.slots);
+
+  // Update static UI with profile name
+  document.getElementById('header-title').textContent = `🍼 ${profile.name}'s Firsts`;
+  document.title = `${profile.name} — Firsts`;
+
+  const [status, log, foods, suggestResp] = await Promise.all([
+    fetch('/api/status').then(r=>r.json()),
+    fetch('/api/today-log').then(r=>r.json()),
+    fetch('/api/foods').then(r=>r.json()),
+    fetch('/api/today-suggestion').then(r=>r.json()).catch(()=>({ suggestion:{} })),
+  ]);
+
+  document.getElementById('header-age').textContent = `${status.age.label} old`;
+  document.getElementById('header-date').textContent = status.formatted;
+
+  todayLog     = log;
+  knownFoods   = foods;
+  todaySuggest = suggestResp.suggestion || todaySuggest;
+
+  renderMealSlots();
+  loadWeekStrip();
+  initChat();
+  tabLoaded.today = true;
+}
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+function switchTab(tabName, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(`tab-${tabName}`).classList.add('active');
+  btn.classList.add('active');
+
+  if (tabName === 'plans' && !tabLoaded.plans)    loadPlans();
+  if (tabName === 'milestones' && !tabLoaded.milestones) loadMilestones();
+  if (tabName === 'progress' && !tabLoaded.progress)   loadProgress();
+}
+
+// ── TODAY TAB ────────────────────────────────────────────────────────────────
+function renderMealSlots() {
+  const container = document.getElementById('meal-slots');
+  container.innerHTML = '';
+  for (const [slot, meta] of Object.entries(SLOT_META)) {
+    const meal    = todayLog.meals?.[slot] || {};
+    const suggest = todaySuggest[slot] || { food:'', source:'gordon' };
+    container.insertAdjacentHTML('beforeend', mealCardHTML(slot, meta, meal, suggest));
+    // Auto-load variant panel for pre-saved Disliked meals
+    if (meal.reaction === 'Disliked') {
+      loadVariantsAndSchedule(slot);
+    }
+  }
+}
+
+function mealCardHTML(slot, meta, meal, suggest) {
+  const reactions = [
+    { key:'Loved',    emoji:'😍', cls:'loved' },
+    { key:'Liked',    emoji:'😊', cls:'liked' },
+    { key:'Neutral',  emoji:'😐', cls:'neutral' },
+    { key:'Disliked', emoji:'😖', cls:'disliked' },
+  ];
+  const reactionBtns = reactions.map(r => {
+    const active = meal.reaction === r.key ? ` active ${r.cls}` : '';
+    return `<button class="reaction-btn${active} px-3 py-2 text-xl" onclick="setReaction('${slot}','${r.key}',this)">${r.emoji}</button>`;
+  }).join('');
+
+  const optionsList = knownFoods.map(f => `<option value="${f}">`).join('');
+  const eatenOn     = meal.eaten ? ' on' : '';
+
+  // Food value: logged meal takes priority, else suggestion
+  const alreadyLogged  = !!meal.food;
+  const overridden     = slotOverrides[slot];
+  const displayFood    = alreadyLogged ? meal.food : (overridden ? '' : suggest.food);
+  const showBadge      = !alreadyLogged && !overridden && suggest.food;
+
+  // Badge + always-visible Change button
+  let badgeHTML = '';
+  const showChange = displayFood; // show Change whenever there's any food shown
+  if (showBadge) {
+    if (suggest.source === '5day') {
+      badgeHTML = `
+        <div class="flex items-center mt-1.5 gap-1">
+          <span class="text-xs font-semibold" style="color:var(--peach)">Day ${suggest.dayNumber}/5 — 5-day intro continuing</span>
+          <button onclick="overrideSlot('${slot}')" class="ml-auto text-xs text-gray-300 hover:text-gray-500 underline">Change</button>
+        </div>`;
+    } else {
+      badgeHTML = `
+        <div class="flex items-center mt-1.5 gap-1">
+          <span class="text-xs text-gray-400">🍳 Gordon suggests</span>
+          <button onclick="overrideSlot('${slot}')" class="ml-auto text-xs text-gray-300 hover:text-gray-500 underline">Change</button>
+        </div>`;
+    }
+  } else if (showChange) {
+    badgeHTML = `
+      <div class="flex items-center mt-1.5">
+        <button onclick="overrideSlot('${slot}')" class="text-xs text-gray-300 hover:text-gray-500 underline">Change</button>
+      </div>`;
+  }
+
+  return `
+  <div class="card mb-4 overflow-hidden" id="card-${slot}">
+    <div class="${meta.headerClass} px-4 py-3 flex items-center justify-between">
+      <div>
+        <span class="font-bold text-sm">${meta.emoji} ${meta.label}</span>
+        <span class="text-xs text-gray-500 ml-2">${meta.subLabel}</span>
+      </div>
+      <span id="saved-badge-${slot}" class="text-xs text-gray-400">${meal.savedAt ? '✓ saved' : ''}</span>
+    </div>
+    <div class="p-4 space-y-3">
+      <div>
+        <input list="food-list-${slot}" id="food-${slot}" type="text"
+          placeholder="${showBadge ? '' : 'What did she eat?'}"
+          value="${escAttr(displayFood)}"
+          class="w-full bg-gray-50 rounded-xl px-3 py-2 text-sm border border-gray-100"
+          oninput="onFoodInput('${slot}')" />
+        <datalist id="food-list-${slot}">${optionsList}</datalist>
+        <div id="badge-${slot}">${badgeHTML}</div>
+      </div>
+      <div class="flex gap-2">${reactionBtns}</div>
+      <textarea id="notes-${slot}" placeholder="Notes…"
+        class="w-full bg-gray-50 rounded-xl px-3 py-2 text-sm border border-gray-100 resize-none"
+        rows="2" oninput="debounceSave('${slot}')">${meal.notes||''}</textarea>
+    </div>
+    <div id="variants-${slot}" class="px-4 pb-4 hidden"></div>
+  </div>`;
+}
+
+function overrideSlot(slot) {
+  slotOverrides[slot] = true;
+  document.getElementById(`food-${slot}`).value       = '';
+  document.getElementById(`food-${slot}`).placeholder = 'What did she eat?';
+  document.getElementById(`badge-${slot}`).innerHTML  = '';
+  document.getElementById(`food-${slot}`).focus();
+}
+
+function onFoodInput(slot) {
+  // If user typed something, treat as override of suggestion
+  if (document.getElementById(`food-${slot}`).value.trim()) {
+    slotOverrides[slot] = true;
+    document.getElementById(`badge-${slot}`).innerHTML = '';
+  }
+  debounceSave(slot);
+}
+
+let saveTimers = {};
+function debounceSave(slot) {
+  clearTimeout(saveTimers[slot]);
+  saveTimers[slot] = setTimeout(() => saveMeal(slot), 800);
+}
+
+function toggleEaten(slot, btn) {
+  btn.classList.toggle('on');
+  const isOn = btn.classList.contains('on');
+  document.getElementById(`eaten-label-${slot}`).textContent = isOn ? 'She ate it!' : 'Did she eat it?';
+  saveMeal(slot);
+}
+
+function setReaction(slot, reaction, btn) {
+  const card = document.getElementById(`card-${slot}`);
+  card.querySelectorAll('.reaction-btn').forEach(b => b.classList.remove('active','loved','liked','neutral','disliked'));
+  btn.classList.add('active', reaction.toLowerCase());
+  saveMeal(slot, reaction);
+  if (reaction === 'Disliked') loadVariantsAndSchedule(slot);
+  else document.getElementById(`variants-${slot}`).classList.add('hidden');
+}
+
+async function saveMeal(slot, reactionOverride) {
+  const food     = document.getElementById(`food-${slot}`)?.value || '';
+  const eaten    = document.getElementById(`eaten-${slot}`)?.classList.contains('on') || false;
+  const notes    = document.getElementById(`notes-${slot}`)?.value || '';
+  const reaction = reactionOverride || getActiveReaction(slot);
+
+  if (!food) return;
+  await fetch('/api/log-meal', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ slot, food, eaten, reaction, notes })
+  });
+
+  // Update saved indicator
+  const badge = document.getElementById(`saved-badge-${slot}`);
+  if (badge) badge.textContent = '✓ saved';
+}
+
+function getActiveReaction(slot) {
+  const card = document.getElementById(`card-${slot}`);
+  const active = card?.querySelector('.reaction-btn.active');
+  if (!active) return '';
+  for (const cls of ['loved','liked','neutral','disliked']) {
+    if (active.classList.contains(cls)) {
+      return cls.charAt(0).toUpperCase() + cls.slice(1);
+    }
+  }
+  return '';
+}
+
+async function loadVariantsAndSchedule(slot) {
+  const food = document.getElementById(`food-${slot}`)?.value?.trim();
+  if (!food) return;
+
+  const suggest       = todaySuggest[slot] || {};
+  const is5day        = suggest.source === '5day' && suggest.daysRemaining > 0;
+  const daysRemaining = suggest.daysRemaining || 0;
+  const currentDayNum = suggest.dayNumber || 1;
+
+  const container = document.getElementById(`variants-${slot}`);
+  container.classList.remove('hidden');
+  container.innerHTML = `<div class="text-xs text-gray-400 pb-2">Finding tomorrow's option<span class="loading-dots"></span></div>`;
+
+  // Tomorrow's date
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr       = tomorrow.toISOString().split('T')[0];
+  const tomorrowFormatted = tomorrow.toLocaleDateString('en-IN', { weekday:'short', month:'short', day:'numeric' });
+
+  // Get multiple variations for tomorrow
+  let variations = [];
+  if (is5day) {
+    // Keep same hero ingredient per 5-day rule — generate 3 variations
+    const data = await fetch('/api/dislike-variations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ food, daysRemaining: 3 }),
+    }).then(r => r.json());
+    variations = data.variations || [];
+  } else {
+    // Any food — get substitute variants
+    const data = await fetch(`/api/variants/${encodeURIComponent(food)}`).then(r => r.json());
+    variations = (data || []).map(v => ({ name: v.name, description: v.description }));
+  }
+
+  if (!variations.length) {
+    container.innerHTML = '<div class="text-xs text-gray-400">No suggestions found.</div>';
+    return;
+  }
+
+  const actualDay = is5day ? currentDayNum + 1 : null;
+  const daysLeft  = is5day ? 5 - actualDay     : null;
+
+  let html = `<div class="bg-amber-50 rounded-xl p-3 border border-amber-100">`;
+  if (is5day) {
+    html += `<div class="text-xs font-bold text-amber-700 mb-1">🔄 ${daysRemaining} more day${daysRemaining > 1 ? 's' : ''} with ${escHtml(food)}</div>
+             <div class="text-xs text-amber-600 mb-2">5-day rule — pick a variation for tomorrow.</div>`;
+  } else {
+    html += `<div class="text-xs font-bold text-amber-700 mb-2">Pick one for tomorrow</div>`;
+  }
+
+  html += variations.map((v, i) => `
+    <div class="bg-white rounded-lg p-2 mb-1.5 border border-amber-100" id="sched-card-${slot}-${i}">
+      <div class="text-xs font-semibold text-gray-700 mb-0.5">${escHtml(v.name)}</div>
+      ${v.description ? `<div class="text-xs text-gray-400 mb-1.5">${escHtml(v.description)}</div>` : ''}
+      <button class="use-btn text-xs bg-amber-100 hover:bg-amber-200 text-amber-800 font-semibold px-3 py-1 rounded-full transition-all"
+        onclick="scheduleVariation(this,'${escAttr(slot)}','${escAttr(tomorrowStr)}','${escAttr(v.name)}',${actualDay},${daysLeft},'${escAttr(tomorrowFormatted)}','${escAttr(food)}')">
+        Use for ${tomorrowFormatted} →
+      </button>
+    </div>`).join('');
+
+  html += `</div>`;
+  container.innerHTML = html;
+}
+
+async function scheduleVariation(btn, slot, date, food, dayNumber, daysRemaining, dateFormatted, heroFood) {
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  try {
+    const r = await fetch('/api/schedule-meal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date, slot, food, dayNumber, daysRemaining }),
+    });
+    if (!r.ok) throw new Error('Failed');
+    // Confirm on this card
+    btn.textContent = `✓ Scheduled for ${dateFormatted}`;
+    btn.className = 'use-btn text-xs bg-green-100 text-green-700 font-semibold px-3 py-1 rounded-full';
+    // Disable all other "Use" buttons in the same slot's amber panel (different dates can coexist)
+    const panel = document.getElementById(`variants-${slot}`);
+    panel.querySelectorAll('.use-btn').forEach(b => {
+      if (b !== btn && !b.textContent.startsWith('✓')) {
+        b.disabled = true;
+        b.className = 'use-btn text-xs bg-gray-100 text-gray-400 font-semibold px-3 py-1 rounded-full cursor-not-allowed';
+      }
+    });
+    // Update todaySuggest cache so same-day reload shows scheduled badge
+    todaySuggest[`_scheduled_${slot}_${date}`] = { food, dayNumber, daysRemaining };
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = 'Retry →';
+    btn.className = 'use-btn text-xs bg-red-100 text-red-700 font-semibold px-3 py-1 rounded-full';
+  }
+}
+
+async function loadWeekStrip() {
+  const week = await fetch('/api/week-summary').then(r=>r.json());
+  const strip = document.getElementById('week-strip');
+  strip.innerHTML = '';
+  const rxEmoji = { Loved:'😍', Liked:'😊', Neutral:'😐', Disliked:'😖' };
+
+  week.slice().reverse().forEach(day => {
+    const meals = day.log?.meals || {};
+    const hasData = Object.values(meals).some(m => m.food);
+    const isToday = day.date === new Date().toISOString().split('T')[0];
+
+    const dots = Object.keys(SLOT_META).map(slot => {
+      const m = meals[slot];
+      if (!m?.food) return `<div class="w-1.5 h-1.5 rounded-full bg-gray-100"></div>`;
+      const rxPill = m.reaction ? `<span class="text-xs">${rxEmoji[m.reaction]||'·'}</span>` : `<div class="w-1.5 h-1.5 rounded-full bg-gray-300"></div>`;
+      return rxPill;
+    }).join('');
+
+    strip.insertAdjacentHTML('beforeend', `
+      <div class="day-cell text-center ${isToday ? 'ring-2 ring-orange-300 rounded-xl' : ''}">
+        <div class="text-xs font-semibold ${isToday ? 'text-orange-500' : 'text-gray-400'}">${day.formatted.split(' ')[0]}</div>
+        <div class="text-xs text-gray-300">${day.formatted.split(' ')[1]}</div>
+        <div class="mt-1 flex flex-col items-center gap-0.5">${dots}</div>
+      </div>`);
+  });
+}
+
+// ── ONBOARDING ───────────────────────────────────────────────────────────────
+let onbStep = 1;
+const ONB_TOTAL = 5;
+const onbState = { name:'', dob:'', gender:'', dietary:'', slots:[
+  { label:'Morning Snack', time:'10:00' },
+  { label:'Lunch', time:'12:30' },
+  { label:'Afternoon Snack', time:'15:30' },
+]};
+
+function showOnboarding() {
+  document.getElementById('onboarding-overlay').classList.remove('hidden');
+  onbStep = 1;
+  renderOnbStep();
+}
+
+function renderOnbDots() {
+  const c = document.getElementById('onb-dots');
+  c.innerHTML = Array.from({length: ONB_TOTAL}, (_,i) =>
+    `<div class="step-dot${i < onbStep ? ' active' : ''}"></div>`).join('');
+}
+
+function renderOnbStep() {
+  renderOnbDots();
+  const body = document.getElementById('onb-body');
+  const back = document.getElementById('onb-back');
+  const next = document.getElementById('onb-next');
+  back.style.display = onbStep === 1 ? 'none' : '';
+  next.textContent = onbStep === ONB_TOTAL ? 'Done ✓' : 'Next →';
+
+  const steps = {
+    1: `<div class="flex flex-col items-center text-center pt-8">
+          <div class="text-5xl mb-4">🍼</div>
+          <h2 class="text-2xl font-bold mb-2" style="color:var(--peach-d)">Welcome to Firsts</h2>
+          <p class="text-gray-400 text-sm mb-8">Your baby's personalised growth companion</p>
+          <p class="text-sm font-semibold text-gray-600 mb-2 self-start">Baby's name</p>
+          <input id="onb-name" type="text" placeholder="e.g. Saahiti" value="${escAttr(onbState.name)}"
+            class="w-full bg-white border-2 border-gray-200 rounded-2xl px-4 py-3 text-lg font-semibold text-center focus:border-orange-300"
+            oninput="onbState.name=this.value" onkeydown="if(event.key==='Enter')onbNext()" />
+          <p id="onb-err" class="text-xs text-red-500 mt-2 hidden">Please enter a name</p>
+        </div>`,
+    2: `<div class="flex flex-col pt-4">
+          <h2 class="text-xl font-bold mb-1" style="color:var(--peach-d)">Date of birth</h2>
+          <p class="text-gray-400 text-sm mb-6">We use this to track age and milestones accurately</p>
+          <input id="onb-dob" type="date" value="${escAttr(onbState.dob)}"
+            max="${new Date().toISOString().split('T')[0]}"
+            class="w-full bg-white border-2 border-gray-200 rounded-2xl px-4 py-3 text-base"
+            oninput="onbState.dob=this.value" />
+          <p id="onb-err" class="text-xs text-red-500 mt-2 hidden">Please enter a valid birth date</p>
+        </div>`,
+    3: `<div class="flex flex-col pt-4">
+          <h2 class="text-xl font-bold mb-1" style="color:var(--peach-d)">Gender</h2>
+          <p class="text-gray-400 text-sm mb-6">Used for pronouns in suggestions</p>
+          <div class="flex gap-3">
+            ${[['girl','👧 Girl'],['boy','👦 Boy'],['other','🧒 Other']].map(([v,l]) =>
+              `<button class="opt-btn${onbState.gender===v?' selected':''}" onclick="onbSelect('gender','${v}',this)">${l}</button>`).join('')}
+          </div>
+          <p id="onb-err" class="text-xs text-red-500 mt-2 hidden">Please select one</p>
+        </div>`,
+    4: `<div class="flex flex-col pt-4">
+          <h2 class="text-xl font-bold mb-1" style="color:var(--peach-d)">Dietary preference</h2>
+          <p class="text-gray-400 text-sm mb-6">Sets the default for food suggestions</p>
+          <div class="flex gap-3">
+            ${[['vegetarian','🥦 Vegetarian'],['non-vegetarian','🍗 Non-veg']].map(([v,l]) =>
+              `<button class="opt-btn${onbState.dietary===v?' selected':''}" onclick="onbSelect('dietary','${v}',this)">${l}</button>`).join('')}
+          </div>
+          <p class="text-xs text-gray-400 mt-3">You can change this later in Settings.</p>
+          <p id="onb-err" class="text-xs text-red-500 mt-2 hidden">Please select one</p>
+        </div>`,
+    5: `<div class="flex flex-col pt-4">
+          <h2 class="text-xl font-bold mb-1" style="color:var(--peach-d)">Meal schedule</h2>
+          <p class="text-gray-400 text-sm mb-4">Name each meal and set the usual time</p>
+          <div id="onb-slots-list">${renderSlotRows(onbState.slots,'onb')}</div>
+          <button onclick="onbAddSlot()" class="text-sm text-orange-500 font-semibold mt-1">+ Add meal</button>
+          <p id="onb-err" class="text-xs text-red-500 mt-2 hidden">Each meal needs a name</p>
+        </div>`,
+  };
+  body.innerHTML = steps[onbStep] || '';
+  if (onbStep === 1) document.getElementById('onb-name')?.focus();
+}
+
+function onbSelect(field, value, btn) {
+  onbState[field] = value;
+  btn.closest('.flex').querySelectorAll('.opt-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+}
+
+function onbValidate() {
+  const err = document.getElementById('onb-err');
+  const show = msg => { err.textContent = msg; err.classList.remove('hidden'); return false; };
+  if (onbStep === 1) { if (!onbState.name.trim()) return show('Please enter a name'); }
+  if (onbStep === 2) { if (!onbState.dob || new Date(onbState.dob) > new Date()) return show('Please enter a valid birth date'); }
+  if (onbStep === 3) { if (!onbState.gender) return show('Please select one'); }
+  if (onbStep === 4) { if (!onbState.dietary) return show('Please select one'); }
+  if (onbStep === 5) {
+    syncOnbSlots();
+    if (onbState.slots.some(s => !s.label.trim())) return show('Each meal needs a name');
+  }
+  return true;
+}
+
+function syncOnbSlots() {
+  onbState.slots = Array.from(document.querySelectorAll('#onb-slots-list .slot-row')).map(row => ({
+    label: row.querySelector('input[type=text]').value,
+    time:  row.querySelector('input[type=time]').value,
+  }));
+}
+
+function onbNext() {
+  if (!onbValidate()) return;
+  if (onbStep < ONB_TOTAL) { onbStep++; renderOnbStep(); }
+  else submitOnboarding();
+}
+
+function onbBack() {
+  if (onbStep > 1) { onbStep--; renderOnbStep(); }
+}
+
+function onbAddSlot() {
+  syncOnbSlots();
+  onbState.slots.push({ label:'', time:'12:00' });
+  document.getElementById('onb-slots-list').innerHTML = renderSlotRows(onbState.slots, 'onb');
+}
+
+async function submitOnboarding() {
+  const btn = document.getElementById('onb-next');
+  btn.textContent = 'Saving…'; btn.disabled = true;
+  try {
+    const r = await fetch('/api/profile', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ name: onbState.name.trim(), dob: onbState.dob, gender: onbState.gender, dietary: onbState.dietary, slots: onbState.slots }),
+    });
+    const data = await r.json();
+    if (!data.success) throw new Error(data.error || 'Save failed');
+    document.getElementById('onboarding-overlay').classList.add('hidden');
+    await initWithProfile(data.profile);
+  } catch(e) {
+    btn.textContent = 'Done ✓'; btn.disabled = false;
+    const err = document.getElementById('onb-err');
+    err.textContent = 'Something went wrong. Try again.'; err.classList.remove('hidden');
+  }
+}
+
+// ── SETTINGS ─────────────────────────────────────────────────────────────────
+function openSettings() {
+  const overlay = document.getElementById('settings-overlay');
+  overlay.classList.remove('hidden');
+
+  // Dietary buttons
+  document.getElementById('settings-dietary').innerHTML =
+    [['vegetarian','🥦 Vegetarian'],['non-vegetarian','🍗 Non-veg']].map(([v,l]) =>
+      `<button class="opt-btn${appProfile.dietary===v?' selected':''}" onclick="settingsSelectDietary('${v}',this)">${l}</button>`
+    ).join('');
+
+  // Slot rows — carry existing IDs
+  const slotsWithIds = appProfile.slots.map(s => ({ ...s }));
+  document.getElementById('settings-slots').innerHTML = renderSlotRows(slotsWithIds, 'sett', true);
+}
+
+function settingsSelectDietary(value, btn) {
+  btn.closest('.flex').querySelectorAll('.opt-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+}
+
+function settingsAddSlot() {
+  const list = document.getElementById('settings-slots');
+  const temp = document.createElement('div');
+  temp.innerHTML = renderSlotRows([{ label:'', time:'12:00' }], 'sett', false);
+  list.appendChild(temp.firstElementChild);
+}
+
+function closeSettings() {
+  document.getElementById('settings-overlay').classList.add('hidden');
+  document.getElementById('settings-error').classList.add('hidden');
+}
+
+async function saveSettings() {
+  const dietary = document.querySelector('#settings-dietary .opt-btn.selected')?.dataset?.value
+    || document.querySelector('#settings-dietary .opt-btn.selected')?.textContent?.trim();
+
+  // Get dietary value from button onclick attr
+  const dietBtn = document.querySelector('#settings-dietary .opt-btn.selected');
+  const dietaryVal = dietBtn ? dietBtn.getAttribute('onclick').match(/'([^']+)'/)?.[1] : null;
+
+  const rows = Array.from(document.querySelectorAll('#settings-slots .slot-row'));
+  const slots = rows.map(row => ({
+    id:    row.dataset.slotId || undefined,
+    label: row.querySelector('input[type=text]').value.trim(),
+    time:  row.querySelector('input[type=time]').value,
+  }));
+
+  const errEl = document.getElementById('settings-error');
+  if (!dietaryVal) { errEl.textContent = 'Select a dietary preference'; errEl.classList.remove('hidden'); return; }
+  if (slots.some(s => !s.label)) { errEl.textContent = 'Each meal needs a name'; errEl.classList.remove('hidden'); return; }
+  errEl.classList.add('hidden');
+
+  try {
+    const r = await fetch('/api/settings', {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ dietary: dietaryVal, slots }),
+    });
+    const data = await r.json();
+    if (!data.success) throw new Error(data.error);
+    appProfile = data.profile;
+    buildSlotMeta(appProfile.slots);
+    closeSettings();
+    // Re-fetch today data with new slots
+    const [log, suggestResp] = await Promise.all([
+      fetch('/api/today-log').then(r=>r.json()),
+      fetch('/api/today-suggestion').then(r=>r.json()).catch(()=>({ suggestion:{} })),
+    ]);
+    todayLog     = log;
+    todaySuggest = suggestResp.suggestion || todaySuggest;
+    renderMealSlots();
+    loadWeekStrip();
+  } catch(e) {
+    errEl.textContent = 'Save failed. Try again.'; errEl.classList.remove('hidden');
+  }
+}
+
+// Shared slot row renderer (used by both onboarding and settings)
+function renderSlotRows(slots, prefix, withIds = false) {
+  return slots.map((s, i) => `
+    <div class="slot-row" ${withIds && s.id ? `data-slot-id="${escAttr(s.id)}"` : ''}>
+      <input type="text" placeholder="Meal name" value="${escAttr(s.label||'')}" />
+      <input type="time" value="${escAttr(s.time||'12:00')}" />
+      <button class="del-btn" onclick="removeSlotRow(this)" title="Remove">×</button>
+    </div>`).join('');
+}
+
+function removeSlotRow(btn) {
+  const rows = btn.closest('.slot-row').parentElement.querySelectorAll('.slot-row');
+  if (rows.length <= 1) return; // keep at least one
+  btn.closest('.slot-row').remove();
+}
+
+// ── CHAT TAB ─────────────────────────────────────────────────────────────────
+function initChat() {
+  selectAgent('gordon');
+}
+
+function selectAgent(agent) {
+  currentAgent = agent;
+  document.querySelectorAll('.agent-pill').forEach(p => p.classList.remove('active'));
+  document.querySelector(`.agent-pill.${agent}`).classList.add('active');
+
+  const meta = AGENT_META[agent];
+  document.getElementById('agent-desc').textContent = `${meta.icon} ${meta.name} — ${meta.desc}`;
+
+  if (chatHistory.length === 0) {
+    document.getElementById('chat-messages').innerHTML = `
+      <div class="text-center text-xs text-gray-300 py-4">${meta.icon} ${meta.name} is ready. Ask anything about Saahiti.</div>`;
+  }
+}
+
+function clearChat() {
+  chatHistory = [];
+  document.getElementById('chat-messages').innerHTML = `
+    <div class="text-center text-xs text-gray-300 py-4">${AGENT_META[currentAgent].icon} ${AGENT_META[currentAgent].name} is ready. Ask anything about Saahiti.</div>`;
+}
+
+async function sendChat() {
+  const input = document.getElementById('chat-input');
+  const q = input.value.trim();
+  if (!q) return;
+  input.value = '';
+
+  const msgs = document.getElementById('chat-messages');
+
+  // User bubble
+  msgs.insertAdjacentHTML('beforeend', `<div class="bubble bubble-user">${escHtml(q)}</div>`);
+  msgs.scrollTop = msgs.scrollHeight;
+
+  // Loading bubble
+  const loadId = 'load-' + Date.now();
+  msgs.insertAdjacentHTML('beforeend', `<div class="bubble bubble-agent" id="${loadId}"><span class="loading-dots text-gray-400">Thinking</span></div>`);
+  msgs.scrollTop = msgs.scrollHeight;
+
+  const resp = await fetch('/api/chat', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ agent: currentAgent, question: q })
+  }).then(r=>r.json());
+
+  const loadEl = document.getElementById(loadId);
+  if (loadEl) loadEl.outerHTML = `<div class="bubble bubble-agent">${escHtml(resp.response || resp.error || 'Error')}</div>`;
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+// ── PLANS TAB ────────────────────────────────────────────────────────────────
+async function loadPlans() {
+  tabLoaded.plans = true;
+  roadmapData = await fetch('/api/food-roadmap').then(r=>r.json());
+  renderPlans(roadmapData.age.months);
+}
+
+function renderPlans(filterMonth) {
+  const { weeks, age } = roadmapData;
+  const months = [...new Set(weeks.map(w => w.month))].sort((a,b)=>a-b);
+
+  // Month filter pills
+  const filterEl = document.getElementById('month-filter');
+  filterEl.innerHTML = months.map(m => {
+    const active = m === filterMonth ? 'ring-2' : '';
+    const isCur = m === age.months ? ' bg-orange-100' : ' bg-white';
+    return `<button onclick="renderPlans(${m})" class="flex-shrink-0 card ${isCur} ${active} ring-orange-300 px-4 py-1.5 text-sm font-semibold">
+      ${m === age.months ? '📍 ' : ''}Month ${m}
+    </button>`;
+  }).join('');
+
+  document.getElementById('plans-age').textContent = `${age.label} old`;
+
+  const filtered = weeks.filter(w => w.month === filterMonth);
+  const grouped  = {};
+  filtered.forEach(w => {
+    const key = `Week ${w.week}`;
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(w);
+  });
+
+  const cards = document.getElementById('roadmap-cards');
+  cards.innerHTML = '';
+
+  for (const [weekLabel, foods] of Object.entries(grouped)) {
+    cards.insertAdjacentHTML('beforeend', `<div class="text-xs font-bold text-gray-400 mt-2 mb-1">${weekLabel.toUpperCase()}</div>`);
+    foods.forEach(fw => {
+      const slotMeta  = SLOT_META[fw.slot] || { emoji:'🍽', label:'Meal', color:'#888' };
+      const tried     = fw.tried;
+      const isCurrent = fw.current;
+      const opacity   = tried ? ' opacity-60' : '';
+      const border    = isCurrent ? ' border-l-4' : '';
+      const borderClr = isCurrent ? 'style="border-left-color:var(--peach)"' : '';
+      const tag       = tried
+        ? '<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">✓ Tried</span>'
+        : (isCurrent
+            ? '<span class="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full font-semibold">→ Now</span>'
+            : '');
+
+      cards.insertAdjacentHTML('beforeend', `
+        <div class="card p-4${border}${opacity}" ${borderClr}>
+          <div class="flex items-start justify-between gap-2">
+            <div class="flex-1">
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-lg">${slotMeta.emoji}</span>
+                <span class="font-bold text-sm">${fw.food}</span>
+                ${tag}
+              </div>
+              <div class="text-xs text-gray-400" style="color:${slotMeta.color};font-weight:600;font-size:11px">${slotMeta.label} · ${slotMeta.subLabel || ''}</div>
+              <p class="text-xs text-gray-500 mt-1.5 leading-relaxed">${fw.tip}</p>
+            </div>
+          </div>
+        </div>`);
+    });
+  }
+
+  if (!filtered.length) {
+    cards.innerHTML = '<div class="text-sm text-gray-400 text-center py-8">No foods for this month yet.</div>';
+  }
+}
+
+// ── MILESTONES TAB ────────────────────────────────────────────────────────────
+async function loadMilestones() {
+  tabLoaded.milestones = true;
+  const [mdResp, acResp] = await Promise.all([
+    fetch('/api/milestones-data').then(r=>r.json()),
+    fetch('/api/milestone-achievements').then(r=>r.json()),
+  ]);
+  milestonesData = mdResp;
+  achievementsData = acResp;
+  renderMilestones();
+}
+
+function renderMilestones() {
+  const { milestones, age } = milestonesData;
+  const achievedIds = new Set(achievementsData.map(a => a.id));
+
+  // Counts
+  const achievedCount  = achievementsData.length;
+  const aheadCount     = achievementsData.filter(a => a.status === 'ahead').length;
+  const sigCount       = achievementsData.filter(a => a.status === 'significantly_ahead').length;
+  document.getElementById('ms-achieved-count').textContent = achievedCount;
+  document.getElementById('ms-ahead-count').textContent    = aheadCount;
+  document.getElementById('ms-sig-count').textContent      = sigCount;
+
+  // Achieved list
+  const achievedEl = document.getElementById('ms-achieved-list');
+  achievedEl.innerHTML = achievementsData.length === 0
+    ? '<div class="text-xs text-gray-300">No milestones logged yet.</div>'
+    : achievementsData.slice().reverse().map(a => achievementCardHTML(a)).join('');
+
+  // Current month
+  const curMilestonesEl = document.getElementById('ms-current-list');
+  const curMonthMs = milestones.filter(m => m.month === age.months);
+  document.getElementById('ms-current-heading').textContent = `MONTH ${age.months} — CHECK IN`;
+  curMilestonesEl.innerHTML = curMonthMs.map(m => {
+    const done = achievedIds.has(m.id);
+    return `
+    <div class="card p-3 flex items-start gap-3 cursor-pointer" onclick="quickLogMilestone('${m.id}','${escAttr(m.label)}','${m.category}',${m.month})">
+      <div class="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center border-2 ${done ? 'bg-green-400 border-green-400' : 'border-gray-200'}" style="margin-top:2px">
+        ${done ? '<span class="text-white text-xs">✓</span>' : ''}
+      </div>
+      <div>
+        <div class="text-sm ${done ? 'text-gray-400 line-through' : 'text-gray-700'}">${m.label}</div>
+        <div class="text-xs text-gray-400">${m.category}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Upcoming (next month)
+  const nextMonthMs = milestones.filter(m => m.month === age.months + 1);
+  document.getElementById('ms-upcoming-heading').textContent = `MONTH ${age.months + 1} — COMING UP`;
+  document.getElementById('ms-upcoming-list').innerHTML = nextMonthMs.map(m => `
+    <div class="card p-3 flex items-start gap-3 opacity-70">
+      <div class="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center border-2 border-dashed border-gray-200" style="margin-top:2px"></div>
+      <div>
+        <div class="text-sm text-gray-500">${m.label}</div>
+        <div class="text-xs text-gray-400">${m.category}</div>
+      </div>
+    </div>`).join('');
+}
+
+function achievementCardHTML(a) {
+  const statusBadge = {
+    within:              '<span class="badge-within text-xs px-2 py-0.5 rounded-full font-semibold">On track</span>',
+    ahead:               '<span class="badge-ahead text-xs px-2 py-0.5 rounded-full font-semibold">Ahead ⭐</span>',
+    significantly_ahead: '<span class="badge-sig text-xs px-2 py-0.5 rounded-full font-semibold">Way ahead 🌟</span>',
+  }[a.status] || '';
+  return `
+  <div class="card p-3">
+    <div class="flex items-start justify-between gap-2">
+      <div class="flex-1">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-sm font-semibold text-gray-700">${a.name}</span>
+          ${statusBadge}
+        </div>
+        <div class="text-xs text-gray-400 mt-0.5">${a.category} · Logged ${a.dateLogged}</div>
+        ${a.notes ? `<div class="text-xs text-gray-500 mt-1 italic">"${a.notes}"</div>` : ''}
+      </div>
+      <button onclick="deleteMilestone('${a.id}')" class="text-gray-200 hover:text-red-300 text-xs ml-1 flex-shrink-0">✕</button>
+    </div>
+  </div>`;
+}
+
+async function quickLogMilestone(id, name, category, month) {
+  if (achievementsData.find(a => a.id === id)) return; // already logged
+  await fetch('/api/milestone-achievements', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ id, name, category, month, status:'within', notes:'' })
+  });
+  achievementsData = await fetch('/api/milestone-achievements').then(r=>r.json());
+  renderMilestones();
+}
+
+async function deleteMilestone(id) {
+  await fetch(`/api/milestone-achievements/${id}`, { method:'DELETE' });
+  achievementsData = await fetch('/api/milestone-achievements').then(r=>r.json());
+  renderMilestones();
+}
+
+function openMilestoneForm() {
+  document.getElementById('ms-form').classList.remove('hidden');
+  document.getElementById('ms-form').scrollIntoView({ behavior:'smooth' });
+}
+
+function closeMilestoneForm() {
+  document.getElementById('ms-form').classList.add('hidden');
+  document.getElementById('ms-text').value = '';
+  document.getElementById('ms-analysis-result').classList.add('hidden');
+  document.getElementById('ms-analysis-result').innerHTML = '';
+}
+
+async function analyzeMilestone() {
+  const text = document.getElementById('ms-text').value.trim();
+  if (!text) return;
+
+  const btn    = document.getElementById('ms-analyze-btn');
+  const result = document.getElementById('ms-analysis-result');
+  btn.textContent  = 'Analyzing…';
+  btn.disabled     = true;
+  result.classList.add('hidden');
+  result.innerHTML = '';
+
+  const resp = await fetch('/api/analyze-milestone', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ text })
+  }).then(r=>r.json());
+
+  btn.textContent = 'Analyze →';
+  btn.disabled    = false;
+  result.classList.remove('hidden');
+
+  if (resp.error) {
+    result.innerHTML = `<div class="text-xs text-red-400">Error: ${escHtml(resp.error)}</div>`;
+    return;
+  }
+
+  if (!resp.isMilestone) {
+    result.innerHTML = `
+      <div class="bg-gray-50 rounded-xl p-3 text-sm">
+        <div class="font-semibold text-gray-600 mb-1">Not a developmental milestone</div>
+        <div class="text-xs text-gray-400">${escHtml(resp.note || 'Meredith couldn\'t match this to a known milestone.')}</div>
+      </div>`;
+    return;
+  }
+
+  if (resp.alreadyLogged) {
+    result.innerHTML = `
+      <div class="bg-amber-50 rounded-xl p-3 text-sm border border-amber-100">
+        <div class="font-semibold text-amber-700 mb-1">Already logged ✓</div>
+        <div class="text-xs text-gray-500">"${escHtml(resp.name)}" is already tracked${resp.alreadyLoggedAs ? ` as "${escHtml(resp.alreadyLoggedAs)}"` : ''}.</div>
+      </div>`;
+    return;
+  }
+
+  const statusColors = {
+    significantly_ahead: { bg:'#FFE4E6', border:'#FECDD3', text:'#881337', badge:'Way ahead 🌟' },
+    ahead:               { bg:'#FEF9C3', border:'#FDE68A', text:'#854D0E', badge:'Ahead ⭐' },
+    on_track:            { bg:'#DCFCE7', border:'#BBF7D0', text:'#166534', badge:'On track ✓' },
+    monitor:             { bg:'#FEF3C7', border:'#FDE68A', text:'#92400E', badge:'Watch 👀' },
+  };
+  const sc = statusColors[resp.status] || statusColors.on_track;
+
+  result.innerHTML = `
+    <div class="rounded-xl p-3 text-sm border" style="background:${sc.bg};border-color:${sc.border}">
+      <div class="flex items-start justify-between gap-2 mb-2">
+        <div class="font-bold" style="color:${sc.text}">${escHtml(resp.name)}</div>
+        <span class="text-xs font-bold px-2 py-0.5 rounded-full" style="background:white;color:${sc.text}">${sc.badge}</span>
+      </div>
+      <div class="text-xs space-y-1" style="color:${sc.text}">
+        <div>📂 <b>Category:</b> ${escHtml(resp.category)}</div>
+        <div>📅 <b>Benchmark:</b> ${escHtml(resp.benchmarkRange || `Month ${resp.benchmarkMonth}`)}</div>
+        <div>📊 <b>Tracking:</b> ${escHtml(resp.statusDetail)}</div>
+        ${resp.note ? `<div class="mt-1 text-gray-500 italic">${escHtml(resp.note)}</div>` : ''}
+      </div>
+      <button onclick="confirmSaveMilestone()" class="mt-3 w-full py-1.5 rounded-lg text-white text-xs font-bold" style="background:var(--sage)">
+        Confirm &amp; save
+      </button>
+    </div>`;
+
+  // Store pending data for confirm
+  result.dataset.pending = JSON.stringify({
+    id: resp.milestoneId || ('custom_' + Date.now()),
+    name: resp.name,
+    category: resp.category,
+    month: resp.benchmarkMonth || milestonesData.age.months,
+    status: resp.status === 'on_track' ? 'within' : resp.status,
+    notes: text,
+  });
+}
+
+async function confirmSaveMilestone() {
+  const result  = document.getElementById('ms-analysis-result');
+  const pending = JSON.parse(result.dataset.pending || '{}');
+  if (!pending.name) return;
+
+  await fetch('/api/milestone-achievements', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(pending)
+  });
+  achievementsData = await fetch('/api/milestone-achievements').then(r=>r.json());
+  renderMilestones();
+  closeMilestoneForm();
+}
+
+// ── PROGRESS TAB ──────────────────────────────────────────────────────────────
+async function loadProgress() {
+  tabLoaded.progress = true;
+  const prog = await fetch('/api/progress').then(r=>r.json());
+  renderProgress(prog);
+}
+
+function renderProgress(prog) {
+  document.getElementById('prog-days').textContent  = prog.daysSinceSolids;
+  document.getElementById('prog-foods').textContent = prog.foodCount;
+  document.getElementById('prog-ms').textContent    = prog.milestoneCount;
+
+  // Reactions chart
+  const total = Object.values(prog.reactions).reduce((a,b)=>a+b, 0) || 1;
+  const rxColors = { Loved:'#FACC15', Liked:'#4ADE80', Neutral:'#94A3B8', Disliked:'#F87171' };
+  const rxEmoji  = { Loved:'😍', Liked:'😊', Neutral:'😐', Disliked:'😖' };
+  document.getElementById('reactions-chart').innerHTML = Object.entries(prog.reactions)
+    .map(([k, v]) => `
+    <div class="flex items-center gap-2">
+      <div class="text-base w-7">${rxEmoji[k]}</div>
+      <div class="text-xs font-medium w-14 text-gray-600">${k}</div>
+      <div class="flex-1 prog-bar">
+        <div class="prog-fill" style="width:${Math.round(v/total*100)}%;background:${rxColors[k]}"></div>
+      </div>
+      <div class="text-xs text-gray-400 w-6 text-right">${v}</div>
+    </div>`).join('');
+
+  // Foods tried
+  const foodsEl = document.getElementById('foods-list');
+  foodsEl.innerHTML = prog.foods.length === 0
+    ? '<span class="text-xs text-gray-300">No foods logged yet.</span>'
+    : prog.foods.map(f => `<span class="inline-block bg-orange-50 text-orange-700 text-xs font-medium px-2.5 py-1 rounded-full">${f.name}</span>`).join('');
+
+  // Milestone breakdown
+  const achieveds = achievementsData.length ? achievementsData : [];
+  const cats = {};
+  achieveds.forEach(a => { cats[a.category] = (cats[a.category]||0)+1; });
+  const msEl = document.getElementById('ms-progress-list');
+  msEl.innerHTML = Object.entries(cats).map(([cat, count]) => `
+    <div class="flex items-center justify-between">
+      <span class="text-sm text-gray-600">${cat}</span>
+      <span class="font-bold text-sm" style="color:var(--sage-d)">${count}</span>
+    </div>`).join('') || '<div class="text-xs text-gray-300">No milestones logged yet.</div>';
+}
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
+function escHtml(t) {
+  return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+function escAttr(t) {
+  return String(t).replace(/'/g,"\\'").replace(/"/g,'&quot;');
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>

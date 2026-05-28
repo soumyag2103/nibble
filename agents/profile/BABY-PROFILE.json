@@ -1,0 +1,14 @@
+{
+  "name": "Saahiti",
+  "dob": "2025-11-05",
+  "gender": "girl",
+  "dietary": "vegetarian",
+  "solidsStartedAt": "2026-04-19",
+  "slots": [
+    { "id": "cs1",   "label": "Morning Snack",    "time": "10:00" },
+    { "id": "lunch", "label": "Lunch",            "time": "12:30" },
+    { "id": "cs2",   "label": "Afternoon Snack",  "time": "15:30" }
+  ],
+  "createdAt": "2026-05-28T00:00:00.000Z",
+  "updatedAt": "2026-05-28T00:00:00.000Z"
+}
