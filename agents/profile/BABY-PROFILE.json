@@ -1,14 +1,26 @@
 {
-  "name": "Saahiti",
-  "dob": "2025-11-05",
+  "name": "Cheryl",
+  "dob": "2025-05-12",
   "gender": "girl",
-  "dietary": "vegetarian",
-  "solidsStartedAt": "2026-04-19",
+  "dietary": "non-vegetarian",
   "slots": [
-    { "id": "cs1",   "label": "Morning Snack",    "time": "10:00" },
-    { "id": "lunch", "label": "Lunch",            "time": "12:30" },
-    { "id": "cs2",   "label": "Afternoon Snack",  "time": "15:30" }
+    {
+      "id": "morning_snack",
+      "label": "Morning Snack",
+      "time": "10:00"
+    },
+    {
+      "id": "lunch",
+      "label": "Lunch",
+      "time": "12:30"
+    },
+    {
+      "id": "afternoon_snack",
+      "label": "Afternoon Snack",
+      "time": "15:30"
+    }
   ],
-  "createdAt": "2026-05-28T00:00:00.000Z",
-  "updatedAt": "2026-05-28T00:00:00.000Z"
+  "solidsStartedAt": "2026-05-28",
+  "createdAt": "2026-05-28T16:37:35.918Z",
+  "updatedAt": "2026-05-28T16:37:35.918Z"
 }

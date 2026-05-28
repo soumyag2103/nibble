@@ -135,6 +135,30 @@
 
     /* Gear button */
     #settings-btn { background:none; border:none; cursor:pointer; font-size:20px; padding:4px; }
+
+    /* Month pills */
+    #month-pills::-webkit-scrollbar { display:none; }
+    .month-pill { flex-shrink:0; padding:6px 16px; border-radius:20px; border:2px solid #f0e8e0;
+      background:white; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap;
+      color:#9ca3af; transition:all 0.15s; }
+    .month-pill.active { background:var(--peach); border-color:var(--peach); color:white; }
+    .month-pill.current-month { border-color:var(--peach); color:var(--peach-d); }
+
+    /* Week card */
+    .week-card { background:white; border-radius:20px; box-shadow:0 2px 16px rgba(0,0,0,0.07); overflow:hidden; }
+    .week-header { display:flex; align-items:center; justify-content:space-between;
+      padding:14px 16px; cursor:pointer; user-select:none; }
+    .week-chevron { font-size:12px; color:#d1d5db; transition:transform 0.2s; }
+    .week-chevron.open { transform:rotate(180deg); }
+    .hero-chip { display:inline-block; padding:3px 10px; border-radius:12px;
+      font-size:11px; font-weight:600; margin:2px; }
+
+    /* Day plan inside expanded week */
+    .day-section { padding-bottom:12px; border-bottom:1px solid #f5f0eb; margin-bottom:12px; }
+    .day-section:last-child { border:none; margin-bottom:0; padding-bottom:0; }
+    .day-label { font-size:11px; font-weight:700; color:#9ca3af; letter-spacing:0.05em; margin-bottom:8px; }
+    .meal-plan-card { border-radius:14px; padding:10px 12px; margin-bottom:6px; }
+    .meal-plan-card:last-child { margin-bottom:0; }
   </style>
 </head>
 <body class="min-h-screen pb-24">
@@ -165,7 +189,7 @@
       <!-- Dietary preference -->
       <div class="mb-6">
         <p class="text-sm font-bold text-gray-600 mb-3">Dietary preference</p>
-        <div class="flex gap-3" id="settings-dietary"></div>
+        <div class="flex flex-wrap gap-3" id="settings-dietary"></div>
       </div>
 
       <!-- Meal slots -->
@@ -236,18 +260,17 @@
   </div>
 
   <!-- ── TAB: PLANS ─────────────────────────────────────────────── -->
-  <div id="tab-plans" class="tab-panel max-w-lg mx-auto px-4 pt-4">
+  <div id="tab-plans" class="tab-panel max-w-lg mx-auto pt-4">
 
-    <div class="flex items-center justify-between mb-4">
+    <!-- Month pills: horizontal scroll -->
+    <div class="px-4 mb-1 flex items-center justify-between">
       <h2 class="text-base font-bold" style="color:var(--peach-d)">Food Roadmap</h2>
-      <div id="plans-age" class="text-xs text-gray-400"></div>
+      <span id="plans-age" class="text-xs text-gray-400"></span>
     </div>
+    <div id="month-pills" class="flex gap-2 overflow-x-auto px-4 pb-3 pt-1" style="scrollbar-width:none"></div>
 
-    <!-- Month filter -->
-    <div id="month-filter" class="flex gap-2 overflow-x-auto pb-2 mb-4"></div>
-
-    <!-- Food cards -->
-    <div id="roadmap-cards" class="space-y-3 pb-4"></div>
+    <!-- Week cards for selected month -->
+    <div id="weeks-container" class="px-4 pb-24 space-y-3"></div>
 
   </div>
 
@@ -394,6 +417,12 @@ const AGENT_META = {
 
 const HEADER_CLASSES = ['cs1-header','lunch-header','cs2-header'];
 const SLOT_EMOJIS    = ['🌤️','☀️','🌸','🌙','🌟'];
+const DIETARY_OPTIONS = [
+  ['vegetarian',    '🥦 Vegetarian'],
+  ['eggetarian',    '🥚 Eggetarian'],
+  ['pescatarian',   '🐟 Pescatarian'],
+  ['non-vegetarian','🍗 Non-veg'],
+];
 let SLOT_META = {};
 
 function buildSlotMeta(slots) {
@@ -802,8 +831,8 @@ function renderOnbStep() {
     4: `<div class="flex flex-col pt-4">
           <h2 class="text-xl font-bold mb-1" style="color:var(--peach-d)">Dietary preference</h2>
           <p class="text-gray-400 text-sm mb-6">Sets the default for food suggestions</p>
-          <div class="flex gap-3">
-            ${[['vegetarian','🥦 Vegetarian'],['non-vegetarian','🍗 Non-veg']].map(([v,l]) =>
+          <div class="flex flex-wrap gap-3">
+            ${DIETARY_OPTIONS.map(([v,l]) =>
               `<button class="opt-btn${onbState.dietary===v?' selected':''}" onclick="onbSelect('dietary','${v}',this)">${l}</button>`).join('')}
           </div>
           <p class="text-xs text-gray-400 mt-3">You can change this later in Settings.</p>
@@ -890,7 +919,7 @@ function openSettings() {
 
   // Dietary buttons
   document.getElementById('settings-dietary').innerHTML =
-    [['vegetarian','🥦 Vegetarian'],['non-vegetarian','🍗 Non-veg']].map(([v,l]) =>
+    DIETARY_OPTIONS.map(([v,l]) =>
       `<button class="opt-btn${appProfile.dietary===v?' selected':''}" onclick="settingsSelectDietary('${v}',this)">${l}</button>`
     ).join('');
 
@@ -1029,74 +1058,146 @@ async function sendChat() {
 }
 
 // ── PLANS TAB ────────────────────────────────────────────────────────────────
+let plansSelectedMonth = null;
+let weekPlanCache = {}; // "month-week" → plan data
+const CHIP_COLORS = [
+  'background:#FEF3C7;color:#92400E', 'background:#DCFCE7;color:#166534',
+  'background:#FCE7F3;color:#9D174D', 'background:#DBEAFE;color:#1E3A8A',
+  'background:#F3E8FF;color:#6B21A8',
+];
+
 async function loadPlans() {
   tabLoaded.plans = true;
   roadmapData = await fetch('/api/food-roadmap').then(r=>r.json());
-  renderPlans(roadmapData.age.months);
+  plansSelectedMonth = roadmapData.age.months;
+  renderPlanMonths();
+  renderPlanWeeks(plansSelectedMonth);
 }
 
-function renderPlans(filterMonth) {
+function renderPlanMonths() {
   const { weeks, age } = roadmapData;
   const months = [...new Set(weeks.map(w => w.month))].sort((a,b)=>a-b);
-
-  // Month filter pills
-  const filterEl = document.getElementById('month-filter');
-  filterEl.innerHTML = months.map(m => {
-    const active = m === filterMonth ? 'ring-2' : '';
-    const isCur = m === age.months ? ' bg-orange-100' : ' bg-white';
-    return `<button onclick="renderPlans(${m})" class="flex-shrink-0 card ${isCur} ${active} ring-orange-300 px-4 py-1.5 text-sm font-semibold">
-      ${m === age.months ? '📍 ' : ''}Month ${m}
-    </button>`;
-  }).join('');
-
   document.getElementById('plans-age').textContent = `${age.label} old`;
 
-  const filtered = weeks.filter(w => w.month === filterMonth);
-  const grouped  = {};
-  filtered.forEach(w => {
-    const key = `Week ${w.week}`;
-    if (!grouped[key]) grouped[key] = [];
-    grouped[key].push(w);
+  document.getElementById('month-pills').innerHTML = months.map(m => {
+    const isCur  = m === age.months;
+    const isAct  = m === plansSelectedMonth;
+    let cls = 'month-pill';
+    if (isAct) cls += ' active';
+    else if (isCur) cls += ' current-month';
+    return `<button class="${cls}" onclick="selectPlanMonth(${m})">${isCur && !isAct ? '📍 ' : ''}Month ${m}</button>`;
+  }).join('');
+}
+
+function selectPlanMonth(month) {
+  plansSelectedMonth = month;
+  renderPlanMonths();
+  renderPlanWeeks(month);
+  // scroll weeks to top
+  document.getElementById('weeks-container').scrollTop = 0;
+}
+
+function renderPlanWeeks(month) {
+  const { weeks } = roadmapData;
+  const monthFoods = weeks.filter(w => w.month === month);
+
+  // Group by week number
+  const byWeek = {};
+  monthFoods.forEach(w => {
+    if (!byWeek[w.week]) byWeek[w.week] = [];
+    byWeek[w.week].push(w);
   });
 
-  const cards = document.getElementById('roadmap-cards');
-  cards.innerHTML = '';
+  // Ensure weeks 1-4 always shown
+  const container = document.getElementById('weeks-container');
+  container.innerHTML = '';
+  for (let wk = 1; wk <= 4; wk++) {
+    const foods = byWeek[wk] || [];
+    const heroChips = foods.map((f, i) => {
+      const style = CHIP_COLORS[i % CHIP_COLORS.length];
+      const triedBadge = f.tried ? ' ✓' : '';
+      return `<span class="hero-chip" style="${style}">${escHtml(f.food)}${triedBadge}</span>`;
+    }).join('');
 
-  for (const [weekLabel, foods] of Object.entries(grouped)) {
-    cards.insertAdjacentHTML('beforeend', `<div class="text-xs font-bold text-gray-400 mt-2 mb-1">${weekLabel.toUpperCase()}</div>`);
-    foods.forEach(fw => {
-      const slotMeta  = SLOT_META[fw.slot] || { emoji:'🍽', label:'Meal', color:'#888' };
-      const tried     = fw.tried;
-      const isCurrent = fw.current;
-      const opacity   = tried ? ' opacity-60' : '';
-      const border    = isCurrent ? ' border-l-4' : '';
-      const borderClr = isCurrent ? 'style="border-left-color:var(--peach)"' : '';
-      const tag       = tried
-        ? '<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">✓ Tried</span>'
-        : (isCurrent
-            ? '<span class="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full font-semibold">→ Now</span>'
-            : '');
+    const cacheKey = `${month}-${wk}`;
+    const isOpen  = !!weekPlanCache[cacheKey];
 
-      cards.insertAdjacentHTML('beforeend', `
-        <div class="card p-4${border}${opacity}" ${borderClr}>
-          <div class="flex items-start justify-between gap-2">
-            <div class="flex-1">
-              <div class="flex items-center gap-2 mb-1">
-                <span class="text-lg">${slotMeta.emoji}</span>
-                <span class="font-bold text-sm">${fw.food}</span>
-                ${tag}
-              </div>
-              <div class="text-xs text-gray-400" style="color:${slotMeta.color};font-weight:600;font-size:11px">${slotMeta.label} · ${slotMeta.subLabel || ''}</div>
-              <p class="text-xs text-gray-500 mt-1.5 leading-relaxed">${fw.tip}</p>
-            </div>
+    container.insertAdjacentHTML('beforeend', `
+      <div class="week-card" id="week-card-${wk}">
+        <div class="week-header" onclick="toggleWeek(${month}, ${wk})">
+          <div>
+            <div class="text-sm font-bold text-gray-700 mb-1">Week ${wk}</div>
+            <div class="flex flex-wrap">${heroChips || '<span class="text-xs text-gray-300">Rotation week</span>'}</div>
           </div>
-        </div>`);
-    });
+          <span class="week-chevron${isOpen ? ' open' : ''}" id="chevron-${month}-${wk}">▼</span>
+        </div>
+        <div id="week-detail-${month}-${wk}" class="${isOpen ? '' : 'hidden'} border-t border-orange-50 px-4 pt-4 pb-2">
+          ${isOpen ? renderWeekPlan(weekPlanCache[cacheKey]) : ''}
+        </div>
+      </div>`);
+  }
+}
+
+async function toggleWeek(month, week) {
+  const detail  = document.getElementById(`week-detail-${month}-${week}`);
+  const chevron = document.getElementById(`chevron-${month}-${week}`);
+  const isOpen  = !detail.classList.contains('hidden');
+
+  if (isOpen) {
+    detail.classList.add('hidden');
+    chevron.classList.remove('open');
+    return;
   }
 
-  if (!filtered.length) {
-    cards.innerHTML = '<div class="text-sm text-gray-400 text-center py-8">No foods for this month yet.</div>';
+  detail.classList.remove('hidden');
+  chevron.classList.add('open');
+
+  const cacheKey = `${month}-${week}`;
+  if (weekPlanCache[cacheKey]) {
+    detail.innerHTML = renderWeekPlan(weekPlanCache[cacheKey]);
+    return;
   }
+
+  // Load from Gordon
+  detail.innerHTML = `<div class="text-xs text-gray-400 py-4 text-center">Gordon is planning this week<span class="loading-dots"></span></div>`;
+  try {
+    const plan = await fetch('/api/week-plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ month, week }),
+    }).then(r => r.json());
+
+    weekPlanCache[cacheKey] = plan;
+    detail.innerHTML = renderWeekPlan(plan);
+  } catch(e) {
+    detail.innerHTML = `<div class="text-xs text-red-400 py-4 text-center">Could not generate plan. <button onclick="toggleWeek(${month},${week});toggleWeek(${month},${week})" class="underline">Retry</button></div>`;
+  }
+}
+
+function renderWeekPlan(plan) {
+  if (!plan?.days?.length) return '<div class="text-xs text-gray-400 py-2">No plan available.</div>';
+
+  return plan.days.map(day => {
+    const meals = Object.entries(day.meals || {}).map(([slotId, meal]) => {
+      const meta = SLOT_META[slotId] || { label: slotId, headerClass:'cs1-header', emoji:'🍽' };
+      const bgMap = { 'cs1-header':'#FFFBEB', 'lunch-header':'#F0FDF4', 'cs2-header':'#FDF2F8' };
+      const bg = bgMap[meta.headerClass] || '#F9FAFB';
+      const colorMap = { 'cs1-header':'#D97706', 'lunch-header':'#16A34A', 'cs2-header':'#DB2777' };
+      const col = colorMap[meta.headerClass] || '#6B7280';
+      return `
+        <div class="meal-plan-card" style="background:${bg}">
+          <div class="text-xs font-bold mb-0.5" style="color:${col}">${escHtml(meta.emoji)} ${escHtml(meta.label)}</div>
+          <div class="text-sm font-semibold text-gray-800">${escHtml(meal.food || '')}</div>
+          <div class="text-xs text-gray-500 mt-1 leading-relaxed">${escHtml(meal.recipe || '')}</div>
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="day-section">
+        <div class="day-label">${escHtml(day.day).toUpperCase()}</div>
+        ${meals}
+      </div>`;
+  }).join('');
 }
 
 // ── MILESTONES TAB ────────────────────────────────────────────────────────────

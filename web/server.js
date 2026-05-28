@@ -95,9 +95,13 @@ function buildGordonPrompt(profile) {
     const dayLog = rj(path.join(LOGS_DIR, `${ds}.json`));
     if (dayLog) logs7.push(jsonToMd(dayLog, p));
   }
-  const dietContext = p.dietary === 'non-vegetarian'
-    ? 'Family is non-vegetarian. Include eggs, chicken, fish when age-appropriate.'
-    : `Family is ${p.dietary}. Suggest only ${p.dietary} options.`;
+  const dietMap = {
+    'vegetarian':     'Family is vegetarian. No eggs, meat, or fish.',
+    'eggetarian':     'Family is eggetarian. Eggs are fine; no meat or fish.',
+    'pescatarian':    'Family is pescatarian. Fish and eggs are fine; no meat.',
+    'non-vegetarian': 'Family is non-vegetarian. Include eggs, chicken, fish when age-appropriate.',
+  };
+  const dietContext = dietMap[p.dietary] || `Family dietary preference: ${p.dietary}.`;
   return `You are Gordon, an AI agent helping parents of ${p.name} (DOB: ${p.dob}, currently ${age.label} old). ${p.name} uses ${pr.pos} pronouns. Today is ${today}. ${dietContext}
 
 ${rf(path.join(GORDON_DIR, 'SOUL.md'))}
@@ -491,9 +495,15 @@ ${lines}`;
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 80, temperature: 0.2,
       });
+      const slotPattern = new RegExp(`^(${slotsNeedingGordon.map(s => s.toUpperCase().replace(/_/g, '[_ ]?')).join('|')}):\\s*(.+)`, 'i');
       for (const line of result.choices[0].message.content.split('\n')) {
-        const m = line.match(/^(CS1|LUNCH|CS2):\s*(.+)/i);
-        if (m) gordonFoods[m[1].toLowerCase()] = m[2].trim().replace(/^\[|\]$/g,'');
+        const m = line.match(slotPattern);
+        if (m) {
+          // Match back to the canonical slot ID by normalising
+          const key = m[1].toLowerCase().replace(/\s/g, '_');
+          const matched = slotsNeedingGordon.find(s => s === key || s.toUpperCase() === m[1].toUpperCase());
+          if (matched) gordonFoods[matched] = m[2].trim().replace(/^\[|\]$/g,'');
+        }
       }
     } catch(e) { console.error('Gordon suggestion error:', e.message); }
   }
@@ -518,7 +528,8 @@ app.post('/api/dislike-variations', async (req, res) => {
   const age = getBabyAge(profile);
   const pr = pronouns(profile);
   if (!daysRemaining || daysRemaining < 1) return res.json({ variations: [] });
-  const dietLabel = profile.dietary === 'non-vegetarian' ? 'family eats non-vegetarian' : `family is ${profile.dietary}`;
+  const dietLabels = { vegetarian:'family is vegetarian', eggetarian:'family is eggetarian (eggs ok, no meat)', pescatarian:'family is pescatarian (fish+eggs ok, no meat)', 'non-vegetarian':'family eats non-vegetarian' };
+  const dietLabel = dietLabels[profile.dietary] || `family dietary: ${profile.dietary}`;
 
   const prompt = `You are Gordon, infant nutrition expert. ${profile.name} is ${age.months} months ${age.days} days old. ${dietLabel}.
 
@@ -725,6 +736,80 @@ app.get('/api/progress', (req, res) => {
     reactions,
     age: getBabyAge(profile),
   });
+});
+
+// POST /api/week-plan — Gordon generates a full 7-day meal plan for a given month+week
+app.post('/api/week-plan', async (req, res) => {
+  const { month, week } = req.body;
+  const profile = loadProfile();
+  const age     = getBabyAge(profile);
+  const pr      = pronouns(profile);
+
+  const heroFoods = FOOD_ROADMAP.filter(r => r.month === month && r.week === week);
+  const heroText  = heroFoods.length
+    ? heroFoods.map(r => `- ${r.food} (${r.slot}): ${r.tip}`).join('\n')
+    : '- Rotate previously-liked foods with minor variations';
+
+  const foodsTried  = rf(path.join(GORDON_DIR, 'FOODS-TRIED.md')) || 'None yet.';
+  const preferences = rf(path.join(GORDON_DIR, 'PREFERENCES.md')) || 'None yet.';
+
+  const dietMap = {
+    'vegetarian':     'strict vegetarian, no eggs/meat/fish',
+    'eggetarian':     'eggetarian — eggs ok, no meat/fish',
+    'pescatarian':    'pescatarian — fish and eggs ok, no meat',
+    'non-vegetarian': 'non-vegetarian, include eggs/chicken/fish when age-appropriate',
+  };
+  const dietNote = dietMap[profile.dietary] || profile.dietary;
+
+  const slotsList = profile.slots.map(s => s.id).join(', ');
+  const slotsDesc = profile.slots.map(s => `"${s.id}" (${s.label} at ${s.time})`).join(', ');
+
+  const dayNames = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+  const dayTemplate = dayNames.map(d =>
+    `{"day":"${d}","meals":{${profile.slots.map(s => `"${s.id}":{"food":"...","recipe":"..."}`).join(',')}}}`
+  ).join(',\n');
+
+  const prompt = `You are Gordon, an expert Indian infant nutrition consultant. You are helping parents plan a full week of meals for ${profile.name} (${age.months} months ${age.days} days old, ${pr.pos} pronouns). Family is ${dietNote}.
+
+This is Week ${week} of Month ${month} of introducing solids.
+
+HERO FOODS FOR THIS WEEK (introduce or build on these):
+${heroText}
+
+FOODS ALREADY TRIED:
+${foodsTried}
+
+PREFERENCES (likes/dislikes):
+${preferences}
+
+MEAL SLOTS: ${slotsDesc}
+
+RULES:
+- Each recipe max 2 sentences. Practical, Indian home kitchen style.
+- Vary the preparation each day — not the same recipe repeated.
+- If a slot has no hero food, use a previously-tried food the baby likes.
+- No salt, sugar, honey, or whole nuts. Ghee and mild spices (cumin, turmeric, ajwain) are fine.
+- Only include foods appropriate for ${age.months} months old.
+- Diet: ${dietNote}
+
+Return ONLY valid JSON — no markdown fences, no explanation:
+{"days":[
+${dayTemplate}
+]}`;
+
+  try {
+    const result = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 2500, temperature: 0.3,
+    });
+    let raw = result.choices[0].message.content.trim()
+      .replace(/^```json\s*/i,'').replace(/^```\s*/i,'').replace(/```\s*$/,'').trim();
+    const plan = JSON.parse(raw);
+    res.json(plan);
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ── Profile & Settings ────────────────────────────────────────────────────────
