@@ -14,6 +14,7 @@ const MEREDITH_DIR = path.join(WORKSPACE, 'agents', 'meredith');
 const BAILEY_DIR   = path.join(WORKSPACE, 'agents', 'bailey');
 const LOGS_DIR     = path.join(WORKSPACE, 'logs');
 const PROFILE_PATH = path.join(WORKSPACE, 'agents', 'profile', 'BABY-PROFILE.json');
+const ROADMAP_PATH = path.join(WORKSPACE, 'agents', 'gordon', 'FOOD-ROADMAP.json');
 
 const DEFAULT_PROFILE = {
   name: 'Baby', dob: new Date().toISOString().split('T')[0], gender: 'other',
@@ -176,55 +177,170 @@ ${rf(path.join(GORDON_DIR, 'FOODS-TRIED.md'))}
 Respond in plain readable text. No markdown symbols. Use line breaks. Be concise and direct.`;
 }
 
+// ── Roadmap Generation (Gordon-driven) ───────────────────────────────────────
+
+async function generateRoadmap(profile) {
+  const p   = profile || loadProfile();
+  const pr  = pronouns(p);
+  const age = getBabyAge(p);
+  const dietMap = {
+    'vegetarian':     'strict vegetarian — no eggs, meat, or fish',
+    'eggetarian':     'eggetarian — eggs are fine, no meat or fish',
+    'pescatarian':    'pescatarian — fish and eggs are fine, no meat',
+    'non-vegetarian': 'non-vegetarian — include eggs, chicken, fish at appropriate ages',
+  };
+  const dietNote = dietMap[p.dietary] || p.dietary;
+  const foodsTried = rf(path.join(GORDON_DIR, 'FOODS-TRIED.md')) || 'None yet.';
+
+  // Build template so Gordon knows exactly what structure to fill
+  const months = [6,7,8,9,10,11,12];
+  const weeks  = [1,2,3,4];
+  const slots  = ['snack1','lunch','snack2'];
+  const template = months.flatMap(m => weeks.flatMap(w => slots.map(s =>
+    `{"month":${m},"week":${w},"slot":"${s}","food":"...","tip":"..."}`
+  ))).join(',\n');
+
+  const prompt = `You are Gordon, an expert Indian infant nutrition consultant. Generate a complete food introduction roadmap for ${p.name} (DOB: ${p.dob}, currently ${age.label} old, ${pr.pos} pronouns). Family is ${dietNote}.
+
+FOODS ALREADY TRIED:
+${foodsTried}
+
+Generate a structured roadmap for months 6 through 12, covering 4 weeks per month. Use these 3 semantic slot names:
+- "snack1" = first snack (morning)
+- "lunch" = main midday meal
+- "snack2" = second snack (afternoon)
+
+RULES:
+- Introduce ONE new food per week maximum per slot. Different new food each slot.
+- Foods tried already can still appear as rotations — label them clearly in the tip.
+- No salt, sugar, honey, whole nuts. Ghee and mild Indian spices (cumin, turmeric, ajwain, coriander) are fine.
+- Age-appropriate textures: smooth puree at 6m, mashed at 7-8m, soft lumps at 9-10m, finger food at 11-12m.
+- Indian home kitchen style throughout.
+- Diet: ${dietNote}. Respect this strictly for every entry.
+- Not every slot needs a new food every week — use null food for rotation weeks.
+- Each tip: max 2 sentences. Practical prep instructions.
+
+Return ONLY valid JSON — no markdown fences, no explanation:
+{"roadmap":[
+${template}
+]}`;
+
+  const result = await groq.chat.completions.create({
+    model: 'llama-3.3-70b-versatile',
+    messages: [{ role: 'user', content: prompt }],
+    max_tokens: 4000, temperature: 0.3,
+  });
+  let raw = result.choices[0].message.content.trim()
+    .replace(/^```json\s*/i,'').replace(/^```\s*/i,'').replace(/```\s*$/,'').trim();
+  const parsed = JSON.parse(raw);
+  // Filter out null/placeholder entries
+  parsed.roadmap = parsed.roadmap.filter(r => r.food && r.food !== '...' && r.food !== 'null' && r.food !== null);
+  wj(ROADMAP_PATH, { generated: new Date().toISOString(), dietary: p.dietary, roadmap: parsed.roadmap });
+  return parsed.roadmap;
+}
+
+function loadRoadmap() {
+  const cached = rj(ROADMAP_PATH);
+  if (cached?.roadmap) return cached.roadmap;
+  return null; // not yet generated
+}
+
+// Map profile slot ID → semantic name (snack1/lunch/snack2) by position
+function slotToSemantic(profile) {
+  const map = {};
+  profile.slots.forEach((s, i) => {
+    map[s.id] = i === 0 ? 'snack1' : i === 1 ? 'lunch' : 'snack2';
+  });
+  return map;
+}
+
+// Get current roadmap food for a given profile slot ID
+// Fallback chain: exact week → any week same month → previous month any week
+function getRoadmapFood(profile, slotId) {
+  const roadmap = loadRoadmap();
+  if (!roadmap) return null;
+  const age    = getBabyAge(profile);
+  const month  = Math.max(6, Math.min(12, age.months));
+  const week   = Math.min(4, Math.floor(age.days / 7) + 1);
+  const semMap = slotToSemantic(profile);
+  const sem    = semMap[slotId];
+  if (!sem) return null;
+
+  // 1. Exact match
+  let entry = roadmap.find(r => r.month === month && r.week === week && r.slot === sem);
+  if (entry?.food) return entry.food;
+
+  // 2. Any week in same month, same slot (pick highest week ≤ current week, else lowest)
+  const sameMonth = roadmap.filter(r => r.month === month && r.slot === sem).sort((a,b) => b.week - a.week);
+  entry = sameMonth.find(r => r.week <= week) || sameMonth[sameMonth.length - 1];
+  if (entry?.food) return entry.food;
+
+  // 3. Previous month, same slot
+  for (let m = month - 1; m >= 6; m--) {
+    const prev = roadmap.filter(r => r.month === m && r.slot === sem).sort((a,b) => b.week - a.week)[0];
+    if (prev?.food) return prev.food;
+  }
+
+  return null;
+}
+
 // ── Static Data ───────────────────────────────────────────────────────────────
 
+// slot field uses semantic names: 'snack1' (first slot), 'lunch' (main meal), 'snack2' (third slot)
+// dietary field (optional): array of dietary keys that include this food; absent = all diets
 const FOOD_ROADMAP = [
   // Month 6
-  { month:6, week:1, slot:'cs1', food:'Banana', tip:'Mash ripe banana with fork. Mix 2 tbsp breast milk to thin.' },
-  { month:6, week:1, slot:'cs2', food:'Sweet Potato', tip:'Steam 12 min, blend smooth. Add 1 tsp ghee for healthy fats.' },
-  { month:6, week:2, slot:'cs1', food:'Apple', tip:'Steam 10 min, blend smooth. Tiny pinch of cardamom aids digestion.' },
-  { month:6, week:2, slot:'cs2', food:'Carrot', tip:'Steam 15 min, blend silky. Mix with potato for creamier texture.' },
-  { month:6, week:3, slot:'cs1', food:'Avocado', tip:'Mash ripe avocado with fork — no cooking. Serve immediately, browns quickly.' },
-  { month:6, week:3, slot:'cs2', food:'Pumpkin', tip:'Steam 10 min, blend smooth. Naturally sweet, rich in Vitamin A.' },
-  { month:6, week:4, slot:'cs1', food:'Papaya', tip:'Use fully ripe papaya only. Natural enzymes prevent constipation.' },
-  { month:6, week:4, slot:'cs2', food:'Green Peas', tip:'Boil, blend, strain through fine mesh. Straining removes skins — essential.' },
+  { month:6, week:1, slot:'snack1', food:'Banana', tip:'Mash ripe banana with fork. Mix 2 tbsp breast milk to thin.' },
+  { month:6, week:1, slot:'snack2', food:'Sweet Potato', tip:'Steam 12 min, blend smooth. Add 1 tsp ghee for healthy fats.' },
+  { month:6, week:2, slot:'snack1', food:'Apple', tip:'Steam 10 min, blend smooth. Tiny pinch of cardamom aids digestion.' },
+  { month:6, week:2, slot:'snack2', food:'Carrot', tip:'Steam 15 min, blend silky. Mix with potato for creamier texture.' },
+  { month:6, week:3, slot:'snack1', food:'Avocado', tip:'Mash ripe avocado with fork — no cooking. Serve immediately, browns quickly.' },
+  { month:6, week:3, slot:'snack2', food:'Pumpkin', tip:'Steam 10 min, blend smooth. Naturally sweet, rich in Vitamin A.' },
+  { month:6, week:4, slot:'snack1', food:'Papaya', tip:'Use fully ripe papaya only. Natural enzymes prevent constipation.' },
+  { month:6, week:4, slot:'snack2', food:'Green Peas', tip:'Boil, blend, strain through fine mesh. Straining removes skins — essential.' },
   // Month 7
   { month:7, week:1, slot:'lunch', food:'Rice Dal Khichdi', tip:'2 tbsp rice + 1 tbsp moong dal, pressure cook 4 whistles with turmeric, add ghee.' },
-  { month:7, week:1, slot:'cs2', food:'Zucchini', tip:'Steam 7 min, blend smooth. Mild flavour, high water content.' },
-  { month:7, week:2, slot:'cs1', food:'Ragi', tip:'Mix ragi flour into boiling water, cook 7 min stirring. Exceptional calcium source.' },
-  { month:7, week:2, slot:'cs2', food:'Spinach', tip:'Blanch 2 min, blend with boiled potato. Potato balances the strong flavour.' },
-  { month:7, week:3, slot:'cs1', food:'Mango', tip:'Fully ripe Alphonso or Kesar only. Blend smooth — no fibrous strings.' },
-  { month:7, week:4, slot:'cs1', food:'Oats', tip:'Cook rolled oats 5 min stirring. Blend smooth, thin with breast milk.' },
-  { month:7, week:4, slot:'cs2', food:'Broccoli', tip:'Steam 8 min, blend smooth. Mix with potato to soften strong flavour.' },
+  { month:7, week:1, slot:'snack2', food:'Zucchini', tip:'Steam 7 min, blend smooth. Mild flavour, high water content.' },
+  { month:7, week:2, slot:'snack1', food:'Ragi', tip:'Mix ragi flour into boiling water, cook 7 min stirring. Exceptional calcium source.' },
+  { month:7, week:2, slot:'snack2', food:'Spinach', tip:'Blanch 2 min, blend with boiled potato. Potato balances the strong flavour.' },
+  { month:7, week:3, slot:'snack1', food:'Mango', tip:'Fully ripe Alphonso or Kesar only. Blend smooth — no fibrous strings.' },
+  { month:7, week:4, slot:'snack1', food:'Oats', tip:'Cook rolled oats 5 min stirring. Blend smooth, thin with breast milk.' },
+  { month:7, week:4, slot:'snack2', food:'Broccoli', tip:'Steam 8 min, blend smooth. Mix with potato to soften strong flavour.' },
   // Month 8
-  { month:8, week:1, slot:'cs1', food:'Pear', tip:'Steam ripe pear 8 min, blend silky smooth. Easiest fruit to digest.' },
-  { month:8, week:2, slot:'cs1', food:'Suji (Semolina)', tip:'Roast in ghee 3 min, cook with water 4 min stirring. No sugar needed.' },
-  { month:8, week:3, slot:'cs1', food:'Chikoo (Sapodilla)', tip:'Fully ripe chikoo only — unripe is astringent. Mash smooth.' },
-  { month:8, week:4, slot:'cs1', food:'Cauliflower', tip:'Steam 10 min, blend smooth. Mix with potato for creamier texture.' },
-  { month:8, week:4, slot:'cs2', food:'Daliya (Broken Wheat)', tip:'Roast 2 min, pressure cook 4 whistles with moong dal. Add ghee.' },
+  { month:8, week:1, slot:'snack1', food:'Pear', tip:'Steam ripe pear 8 min, blend silky smooth. Easiest fruit to digest.' },
+  { month:8, week:1, slot:'lunch', food:'Egg Yolk Dal', tip:'Hard boil, mash yolk into moong dal. Excellent iron + choline for brain.', dietary:['eggetarian','non-vegetarian'] },
+  { month:8, week:2, slot:'snack1', food:'Suji (Semolina)', tip:'Roast in ghee 3 min, cook with water 4 min stirring. No sugar needed.' },
+  { month:8, week:2, slot:'lunch', food:'Chicken Broth Khichdi', tip:'Pressure cook mild chicken broth with rice and moong dal. Strain before serving.', dietary:['non-vegetarian'] },
+  { month:8, week:3, slot:'snack1', food:'Chikoo (Sapodilla)', tip:'Fully ripe chikoo only — unripe is astringent. Mash smooth.' },
+  { month:8, week:4, slot:'snack1', food:'Cauliflower', tip:'Steam 10 min, blend smooth. Mix with potato for creamier texture.' },
+  { month:8, week:4, slot:'snack2', food:'Daliya (Broken Wheat)', tip:'Roast 2 min, pressure cook 4 whistles with moong dal. Add ghee.' },
   // Month 9
-  { month:9, week:1, slot:'cs1', food:'Paneer', tip:'Fresh unsalted paneer only. Mash or blend with a little warm water.' },
-  { month:9, week:1, slot:'cs2', food:'Beetroot', tip:'Boil 20 min, blend smooth. Pink nappies are normal and harmless.' },
-  { month:9, week:2, slot:'cs1', food:'Kiwi', tip:'Fully ripe kiwi. Mix with banana to neutralise acidity.' },
-  { month:9, week:2, slot:'cs2', food:'Mixed Lentils Dal', tip:'Panchmel dal — 5 lentils pressure cooked. Complete amino acid profile.' },
-  { month:9, week:3, slot:'cs1', food:'Poha', tip:'Rinse thin poha, cook 4 min stirring. Iron-rich and easily digestible.' },
-  { month:9, week:3, slot:'cs2', food:'Tomato', tip:'Always cook tomatoes to reduce acidity. Mix with potato to mellow.' },
-  { month:9, week:4, slot:'cs1', food:'Yogurt (Plain)', tip:'Full-fat plain dahi only. Mix with mango or banana. Serve at room temp.' },
-  { month:9, week:4, slot:'cs2', food:'Banana Chunks (Finger Food)', tip:'Cut into 1cm pieces. Must squash easily between your fingers. BLW milestone!' },
+  { month:9, week:1, slot:'snack1', food:'Paneer', tip:'Fresh unsalted paneer only. Mash or blend with a little warm water.' },
+  { month:9, week:1, slot:'snack2', food:'Beetroot', tip:'Boil 20 min, blend smooth. Pink nappies are normal and harmless.' },
+  { month:9, week:1, slot:'lunch', food:'Fish Puree', tip:'Steam white fish (rohu/pomfret) 8 min, blend smooth. No bones — check twice.', dietary:['pescatarian','non-vegetarian'] },
+  { month:9, week:2, slot:'snack1', food:'Kiwi', tip:'Fully ripe kiwi. Mix with banana to neutralise acidity.' },
+  { month:9, week:2, slot:'snack2', food:'Mixed Lentils Dal', tip:'Panchmel dal — 5 lentils pressure cooked. Complete amino acid profile.' },
+  { month:9, week:3, slot:'snack1', food:'Poha', tip:'Rinse thin poha, cook 4 min stirring. Iron-rich and easily digestible.' },
+  { month:9, week:3, slot:'snack2', food:'Tomato', tip:'Always cook tomatoes to reduce acidity. Mix with potato to mellow.' },
+  { month:9, week:4, slot:'snack1', food:'Yogurt (Plain)', tip:'Full-fat plain dahi only. Mix with mango or banana. Serve at room temp.' },
+  { month:9, week:4, slot:'snack2', food:'Banana Chunks (Finger Food)', tip:'Cut into 1cm pieces. Must squash easily between your fingers. BLW milestone!' },
   // Month 10
-  { month:10, week:1, slot:'cs1', food:'Idli', tip:'Steam mini idlis, break into pieces, serve with soft moong dal.' },
-  { month:10, week:1, slot:'cs2', food:'Cheese', tip:'Low-salt full-fat soft mozzarella only. Cut into 1cm cubes for finger food.' },
-  { month:10, week:2, slot:'cs1', food:'Strawberry', tip:'Blend smooth. Mix with banana to reduce acidity. No added sugar.' },
-  { month:10, week:2, slot:'cs2', food:'Corn', tip:'Blend and strain through fine mesh — corn skins are a choking hazard.' },
-  { month:10, week:3, slot:'cs1', food:'Bajra (Pearl Millet)', tip:'Cook bajra flour with water 7 min stirring. Add ghee. Warming and iron-rich.' },
-  { month:10, week:4, slot:'cs1', food:'Jowar (Sorghum)', tip:'Cook jowar flour 7-8 min stirring. Gluten-free, very nutritious.' },
-  { month:10, week:4, slot:'cs2', food:'Lauki (Bottle Gourd)', tip:'Pressure cook with rice + moong dal 4 whistles. Most cooling vegetable.' },
+  { month:10, week:1, slot:'snack1', food:'Idli', tip:'Steam mini idlis, break into pieces, serve with soft moong dal.' },
+  { month:10, week:1, slot:'snack2', food:'Cheese', tip:'Low-salt full-fat soft mozzarella only. Cut into 1cm cubes for finger food.' },
+  { month:10, week:2, slot:'snack1', food:'Strawberry', tip:'Blend smooth. Mix with banana to reduce acidity. No added sugar.' },
+  { month:10, week:2, slot:'snack2', food:'Corn', tip:'Blend and strain through fine mesh — corn skins are a choking hazard.' },
+  { month:10, week:2, slot:'lunch', food:'Scrambled Egg', tip:'Scramble with ghee on low heat until just set. Small soft pieces only.', dietary:['eggetarian','non-vegetarian'] },
+  { month:10, week:3, slot:'snack1', food:'Bajra (Pearl Millet)', tip:'Cook bajra flour with water 7 min stirring. Add ghee. Warming and iron-rich.' },
+  { month:10, week:3, slot:'lunch', food:'Chicken Keema (Mild)', tip:'Mince finely, cook with turmeric + ghee, no salt. Mash with dal before serving.', dietary:['non-vegetarian'] },
+  { month:10, week:4, slot:'snack1', food:'Jowar (Sorghum)', tip:'Cook jowar flour 7-8 min stirring. Gluten-free, very nutritious.' },
+  { month:10, week:4, slot:'snack2', food:'Lauki (Bottle Gourd)', tip:'Pressure cook with rice + moong dal 4 whistles. Most cooling vegetable.' },
   // Month 11
-  { month:11, week:1, slot:'cs1', food:'Soft Roti / Chapati', tip:'Soft enough to squash between fingers. Tear into 2cm pieces with ghee.' },
-  { month:11, week:2, slot:'cs2', food:'Rajma (Kidney Beans)', tip:'Soak overnight, pressure cook 8 whistles. Mash with ghee — complete protein.' },
+  { month:11, week:1, slot:'snack1', food:'Soft Roti / Chapati', tip:'Soft enough to squash between fingers. Tear into 2cm pieces with ghee.' },
+  { month:11, week:2, slot:'snack2', food:'Rajma (Kidney Beans)', tip:'Soak overnight, pressure cook 8 whistles. Mash with ghee — complete protein.' },
+  { month:11, week:3, slot:'lunch', food:'Fish Finger Food', tip:'Steam soft white fish chunk — must flake easily. Remove all bones carefully.', dietary:['pescatarian','non-vegetarian'] },
   // Month 12
-  { month:12, week:1, slot:'cs1', food:'Family Food Adaptation', tip:'Set aside family dal/sabzi before adding salt and whole spices.' },
-  { month:12, week:2, slot:'cs1', food:'Grapes (Quartered)', tip:'Quarter each grape lengthwise — never offer whole. Serious choking hazard.' },
+  { month:12, week:1, slot:'snack1', food:'Family Food Adaptation', tip:'Set aside family dal/sabzi before adding salt and whole spices.' },
+  { month:12, week:2, slot:'snack1', food:'Grapes (Quartered)', tip:'Quarter each grape lengthwise — never offer whole. Serious choking hazard.' },
 ];
 
 const MILESTONES_DATA = [
@@ -468,23 +584,38 @@ app.post('/api/schedule-meal', (req, res) => {
 });
 
 // GET /api/today-suggestion — pre-populated menu for Today tab
-// Priority: scheduled meal > active 5-day intro > Gordon suggestion
+// Priority: scheduled meal > active 5-day intro > roadmap food for current week > Gordon fallback
 app.get('/api/today-suggestion', async (req, res) => {
   const today   = tod();
   const active  = getActive5DayIntros();
   const sched   = (rj(SCHEDULED_PATH) || {})[today] || {};
 
-  const profile = loadProfile();
+  const profile    = loadProfile();
   const allSlotIds = profile.slots.map(s => s.id);
-  const slotsNeedingGordon = allSlotIds.filter(s => !sched[s] && !active[s]);
-  let gordonFoods = {};
 
+  // Slots needing a suggestion (not scheduled and not in active 5-day)
+  const slotsNeedingSuggestion = allSlotIds.filter(s => !sched[s] && !active[s]);
+  const roadmapFoods = {};
+  const slotsNeedingGordon = [];
+
+  // Try roadmap first for each slot
+  for (const slot of slotsNeedingSuggestion) {
+    const food = getRoadmapFood(profile, slot);
+    if (food) {
+      roadmapFoods[slot] = food;
+    } else {
+      slotsNeedingGordon.push(slot);
+    }
+  }
+
+  // Gordon fallback only for slots with no roadmap entry this week
+  let gordonFoods = {};
   if (slotsNeedingGordon.length > 0) {
     const lines = slotsNeedingGordon.map(s => `${s.toUpperCase()}: [food name]`).join('\n');
     const prompt = `${buildGordonPrompt()}
 
 TODAY'S TASK: Suggest one food for each of these slots only: ${slotsNeedingGordon.map(s=>s.toUpperCase()).join(', ')}.
-These slots have no active 5-day introduction. Use RECENT-MEALS and PREFERENCES — no repeats, no dislikes.
+These slots have no active 5-day introduction and no roadmap entry this week. Use RECENT-MEALS and PREFERENCES — no repeats, no dislikes.
 
 Return ONLY these lines, nothing else:
 ${lines}`;
@@ -499,21 +630,22 @@ ${lines}`;
       for (const line of result.choices[0].message.content.split('\n')) {
         const m = line.match(slotPattern);
         if (m) {
-          // Match back to the canonical slot ID by normalising
-          const key = m[1].toLowerCase().replace(/\s/g, '_');
+          const key     = m[1].toLowerCase().replace(/\s/g, '_');
           const matched = slotsNeedingGordon.find(s => s === key || s.toUpperCase() === m[1].toUpperCase());
           if (matched) gordonFoods[matched] = m[2].trim().replace(/^\[|\]$/g,'');
         }
       }
-    } catch(e) { console.error('Gordon suggestion error:', e.message); }
+    } catch(e) { console.error('Gordon fallback suggestion error:', e.message); }
   }
 
   const suggestion = {};
   for (const slot of allSlotIds) {
     if (sched[slot]) {
-      suggestion[slot] = sched[slot]; // chosen variation wins
+      suggestion[slot] = sched[slot];
     } else if (active[slot]) {
       suggestion[slot] = { food: active[slot].food, source: '5day', dayNumber: active[slot].dayNumber, daysRemaining: active[slot].daysRemaining };
+    } else if (roadmapFoods[slot]) {
+      suggestion[slot] = { food: roadmapFoods[slot], source: 'roadmap', dayNumber: null, daysRemaining: 0 };
     } else {
       suggestion[slot] = { food: gordonFoods[slot] || '', source: 'gordon', dayNumber: null, daysRemaining: 0 };
     }
@@ -636,24 +768,54 @@ If not a milestone:
   }
 });
 
-// Food roadmap data (vegetarian, with tried status)
-app.get('/api/food-roadmap', (req, res) => {
-  const content   = rf(path.join(GORDON_DIR, 'FOODS-TRIED.md'));
-  const triedSet  = new Set();
+// Food roadmap — Gordon-generated, cached in FOOD-ROADMAP.json
+app.get('/api/food-roadmap', async (req, res) => {
+  const profile = loadProfile();
+  const age     = getBabyAge(profile);
+
+  let roadmap = loadRoadmap();
+  if (!roadmap) {
+    try { roadmap = await generateRoadmap(profile); }
+    catch(e) { return res.status(500).json({ error: 'Roadmap generation failed: ' + e.message }); }
+  }
+
+  // Map semantic slot names → actual profile slot IDs
+  const slotMap = {
+    snack1: profile.slots[0]?.id || 'snack1',
+    lunch:  profile.slots[1]?.id || 'lunch',
+    snack2: profile.slots[2]?.id || 'snack2',
+  };
+
+  const content  = rf(path.join(GORDON_DIR, 'FOODS-TRIED.md'));
+  const triedSet = new Set();
   for (const line of content.split('\n')) {
     if (line.startsWith('|') && !line.includes('Food') && !line.includes('---')) {
       const name = line.split('|')[1]?.trim();
       if (name) triedSet.add(name.toLowerCase());
     }
   }
-  const age    = getSaahitiAge();
-  const result = FOOD_ROADMAP.map(w => ({
+
+  const result = roadmap.map(w => ({
     ...w,
-    tried: triedSet.has(w.food.toLowerCase()),
-    current: w.month === age.months || (w.month === age.months + 1 && age.days >= 21),
+    slot:     slotMap[w.slot] || w.slot,
+    tried:    triedSet.has(w.food.toLowerCase()),
+    current:  w.month === age.months || (w.month === age.months + 1 && age.days >= 21),
     upcoming: w.month > age.months + 1,
   }));
   res.json({ weeks: result, age });
+});
+
+// Force-regenerate roadmap (called after dietary change in settings)
+app.post('/api/food-roadmap/regenerate', async (req, res) => {
+  const profile = loadProfile();
+  try {
+    // Delete cached file so generateRoadmap writes fresh
+    try { fs.unlinkSync(ROADMAP_PATH); } catch {}
+    const roadmap = await generateRoadmap(profile);
+    res.json({ success: true, count: roadmap.length });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // Milestone achievements
@@ -745,9 +907,11 @@ app.post('/api/week-plan', async (req, res) => {
   const age     = getBabyAge(profile);
   const pr      = pronouns(profile);
 
-  const heroFoods = FOOD_ROADMAP.filter(r => r.month === month && r.week === week);
+  const slotLabelMap = { snack1: profile.slots[0]?.label || 'Snack 1', lunch: profile.slots[1]?.label || 'Lunch', snack2: profile.slots[2]?.label || 'Snack 2' };
+  const roadmap  = loadRoadmap() || [];
+  const heroFoods = roadmap.filter(r => r.month === month && r.week === week);
   const heroText  = heroFoods.length
-    ? heroFoods.map(r => `- ${r.food} (${r.slot}): ${r.tip}`).join('\n')
+    ? heroFoods.map(r => `- ${r.food} (${slotLabelMap[r.slot] || r.slot}): ${r.tip}`).join('\n')
     : '- Rotate previously-liked foods with minor variations';
 
   const foodsTried  = rf(path.join(GORDON_DIR, 'FOODS-TRIED.md')) || 'None yet.';
@@ -840,6 +1004,8 @@ app.post('/api/profile', (req, res) => {
     updatedAt: new Date().toISOString(),
   };
   wj(PROFILE_PATH, profile);
+  // Clear roadmap so it regenerates for the new baby's profile
+  try { fs.unlinkSync(ROADMAP_PATH); } catch {}
   res.json({ success: true, profile });
 });
 
@@ -865,6 +1031,13 @@ app.put('/api/settings', (req, res) => {
 
   const updated = { ...current, dietary, slots: processedSlots, updatedAt: new Date().toISOString() };
   wj(PROFILE_PATH, updated);
+
+  // Invalidate roadmap cache if dietary preference changed
+  if (dietary !== current.dietary) {
+    try { fs.unlinkSync(ROADMAP_PATH); } catch {}
+    console.log(`[settings] Dietary changed ${current.dietary} → ${dietary}. Roadmap cache cleared.`);
+  }
+
   res.json({ success: true, profile: updated });
 });
 

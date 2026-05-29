@@ -540,9 +540,8 @@ function mealCardHTML(slot, meta, meal, suggest) {
         </div>`;
     } else {
       badgeHTML = `
-        <div class="flex items-center mt-1.5 gap-1">
-          <span class="text-xs text-gray-400">🍳 Gordon suggests</span>
-          <button onclick="overrideSlot('${slot}')" class="ml-auto text-xs text-gray-300 hover:text-gray-500 underline">Change</button>
+        <div class="flex items-center mt-1.5">
+          <button onclick="overrideSlot('${slot}')" class="text-xs text-gray-300 hover:text-gray-500 underline">Change</button>
         </div>`;
     }
   } else if (showChange) {
@@ -975,6 +974,14 @@ async function saveSettings() {
     appProfile = data.profile;
     buildSlotMeta(appProfile.slots);
     closeSettings();
+
+    // If dietary changed, regenerate roadmap (async — Plans tab will show loading)
+    const dietaryChanged = data.profile.dietary !== (appProfile.dietary);
+    fetch('/api/food-roadmap/regenerate', { method: 'POST' })
+      .then(() => fetch('/api/food-roadmap').then(r=>r.json()))
+      .then(rd => { roadmapData = rd; })
+      .catch(() => {});
+
     // Re-fetch today data with new slots
     const [log, suggestResp] = await Promise.all([
       fetch('/api/today-log').then(r=>r.json()),
