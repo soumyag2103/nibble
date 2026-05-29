@@ -771,12 +771,15 @@ async function loadWeekStrip() {
 
 // ── ONBOARDING ───────────────────────────────────────────────────────────────
 let onbStep = 1;
-const ONB_TOTAL = 5;
-const onbState = { name:'', dob:'', gender:'', dietary:'', slots:[
-  { label:'Morning Snack', time:'10:00' },
-  { label:'Lunch', time:'12:30' },
-  { label:'Afternoon Snack', time:'15:30' },
-]};
+let ONB_TOTAL = 8;
+const onbState = {
+  name:'', dob:'', gender:'', dietary:'',
+  slots:[ { label:'Morning Snack', time:'10:00' }, { label:'Lunch', time:'12:30' }, { label:'Afternoon Snack', time:'15:30' } ],
+  solidsStarted: '',      // 'yes' | 'no'
+  foodsIntroduced: [],    // string[]
+  exposureDays: 5,        // number
+  activeIntros: [],       // [{food, day, slotId}]
+};
 
 function showOnboarding() {
   document.getElementById('onboarding-overlay').classList.remove('hidden');
@@ -796,7 +799,30 @@ function renderOnbStep() {
   const back = document.getElementById('onb-back');
   const next = document.getElementById('onb-next');
   back.style.display = onbStep === 1 ? 'none' : '';
-  next.textContent = onbStep === ONB_TOTAL ? 'Done ✓' : 'Next →';
+
+  // Conditional next label
+  const isLastStep = onbStep === ONB_TOTAL || (onbStep === 6 && onbState.solidsStarted === 'no');
+  next.textContent = isLastStep ? 'Done ✓' : 'Next →';
+
+  const foodTagsHTML = () => onbState.foodsIntroduced.map((f,i) =>
+    `<span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium" style="background:#FEF3C7;color:#92400E">
+      ${escHtml(f)}<button onclick="onbRemoveFood(${i})" class="ml-1 text-amber-600 hover:text-red-500 font-bold">×</button>
+    </span>`).join('');
+
+  const activeIntroHTML = () => onbState.activeIntros.map((intro,i) => `
+    <div class="flex items-center gap-2 mb-2 p-3 rounded-xl bg-orange-50">
+      <div class="flex-1">
+        <div class="text-sm font-semibold text-gray-700">${escHtml(intro.food)}</div>
+        <div class="text-xs text-gray-400">${escHtml(onbState.slots.find(s=>s.id===intro.slotId||s.label===intro.slotId)?.label||intro.slotId||'Any slot')}</div>
+      </div>
+      <div class="flex items-center gap-1 text-sm font-bold" style="color:var(--peach)">
+        Day <input type="number" min="1" max="${onbState.exposureDays}" value="${intro.day}"
+          class="w-10 text-center border border-orange-200 rounded-lg px-1"
+          oninput="onbState.activeIntros[${i}].day=Math.max(1,Math.min(${onbState.exposureDays},+this.value))" />
+        / ${onbState.exposureDays}
+      </div>
+      <button onclick="onbRemoveActiveIntro(${i})" class="text-gray-300 hover:text-red-400 text-lg font-bold">×</button>
+    </div>`).join('');
 
   const steps = {
     1: `<div class="flex flex-col items-center text-center pt-8">
@@ -844,9 +870,66 @@ function renderOnbStep() {
           <button onclick="onbAddSlot()" class="text-sm text-orange-500 font-semibold mt-1">+ Add meal</button>
           <p id="onb-err" class="text-xs text-red-500 mt-2 hidden">Each meal needs a name</p>
         </div>`,
+    6: `<div class="flex flex-col pt-4">
+          <h2 class="text-xl font-bold mb-1" style="color:var(--peach-d)">Have you started solids?</h2>
+          <p class="text-gray-400 text-sm mb-6">This helps us personalise ${escHtml(onbState.name)}'s food roadmap</p>
+          <div class="flex flex-col gap-3">
+            <button class="opt-btn text-left${onbState.solidsStarted==='yes'?' selected':''}"
+              onclick="onbSelectSolids('yes',this)" style="padding:16px 20px">
+              <div class="font-bold">Yes, we've started</div>
+              <div class="text-xs text-gray-400 mt-1 font-normal">I'll tell you which foods and where we are</div>
+            </button>
+            <button class="opt-btn text-left${onbState.solidsStarted==='no'?' selected':''}"
+              onclick="onbSelectSolids('no',this)" style="padding:16px 20px">
+              <div class="font-bold">Not yet</div>
+              <div class="text-xs text-gray-400 mt-1 font-normal">We'll build the roadmap from scratch</div>
+            </button>
+          </div>
+          <p id="onb-err" class="text-xs text-red-500 mt-2 hidden">Please select one</p>
+        </div>`,
+    7: `<div class="flex flex-col pt-4">
+          <h2 class="text-xl font-bold mb-1" style="color:var(--peach-d)">Foods introduced so far</h2>
+          <p class="text-gray-400 text-sm mb-4">Add all foods ${escHtml(onbState.name)} has already tried</p>
+          <div class="flex gap-2 mb-3">
+            <input id="onb-food-input" type="text" placeholder="e.g. Banana, Apple…"
+              class="flex-1 bg-white border-2 border-gray-200 rounded-2xl px-4 py-2 text-sm"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();onbAddFood()}" />
+            <button onclick="onbAddFood()" class="px-4 py-2 rounded-2xl text-white text-sm font-bold" style="background:var(--peach)">Add</button>
+          </div>
+          <div id="onb-food-tags" class="flex flex-wrap gap-2 min-h-8">${foodTagsHTML()}</div>
+          <p class="text-xs text-gray-400 mt-3">Skip if you haven't introduced any yet.</p>
+          <p id="onb-err" class="text-xs text-red-500 mt-2 hidden"></p>
+        </div>`,
+    8: `<div class="flex flex-col pt-4">
+          <h2 class="text-xl font-bold mb-2" style="color:var(--peach-d)">Exposure settings</h2>
+          <p class="text-gray-400 text-sm mb-4">How many days do you expose each new food before moving on?</p>
+          <div class="flex items-center gap-3 mb-6">
+            <input type="number" min="1" max="14" value="${onbState.exposureDays}"
+              class="w-20 text-center border-2 border-gray-200 rounded-2xl px-3 py-2 text-lg font-bold"
+              oninput="onbState.exposureDays=Math.max(1,+this.value)" />
+            <span class="text-sm text-gray-500">days per food <span class="text-gray-300">(default: 5)</span></span>
+          </div>
+          <p class="text-sm font-semibold text-gray-600 mb-3">Currently introducing any food right now?</p>
+          ${onbState.activeIntros.length ? activeIntroHTML() : ''}
+          <div id="onb-active-list">${onbState.activeIntros.length ? '' : ''}</div>
+          <div class="flex gap-2">
+            <input id="onb-active-food" type="text" placeholder="Food name"
+              class="flex-1 bg-white border-2 border-gray-200 rounded-2xl px-3 py-2 text-sm"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();onbAddActiveIntro()}" />
+            <select id="onb-active-slot" class="bg-white border-2 border-gray-200 rounded-2xl px-2 py-2 text-sm">
+              ${onbState.slots.map(s => `<option value="${escAttr(s.label)}">${escHtml(s.label)}</option>`).join('')}
+            </select>
+            <button onclick="onbAddActiveIntro()" class="px-3 py-2 rounded-2xl text-white text-sm font-bold" style="background:var(--peach)">Add</button>
+          </div>
+          <p class="text-xs text-gray-400 mt-2">Leave empty if nothing is currently being introduced.</p>
+          <p id="onb-err" class="text-xs text-red-500 mt-2 hidden"></p>
+        </div>`,
   };
   body.innerHTML = steps[onbStep] || '';
   if (onbStep === 1) document.getElementById('onb-name')?.focus();
+  if (onbStep === 7) document.getElementById('onb-food-input')?.focus();
+  // Re-render active intros list on step 8
+  if (onbStep === 8) onbRefreshActiveList();
 }
 
 function onbSelect(field, value, btn) {
@@ -857,7 +940,7 @@ function onbSelect(field, value, btn) {
 
 function onbValidate() {
   const err = document.getElementById('onb-err');
-  const show = msg => { err.textContent = msg; err.classList.remove('hidden'); return false; };
+  const show = msg => { if(err){err.textContent = msg; err.classList.remove('hidden');} return false; };
   if (onbStep === 1) { if (!onbState.name.trim()) return show('Please enter a name'); }
   if (onbStep === 2) { if (!onbState.dob || new Date(onbState.dob) > new Date()) return show('Please enter a valid birth date'); }
   if (onbStep === 3) { if (!onbState.gender) return show('Please select one'); }
@@ -866,6 +949,7 @@ function onbValidate() {
     syncOnbSlots();
     if (onbState.slots.some(s => !s.label.trim())) return show('Each meal needs a name');
   }
+  if (onbStep === 6) { if (!onbState.solidsStarted) return show('Please select one'); }
   return true;
 }
 
@@ -878,12 +962,85 @@ function syncOnbSlots() {
 
 function onbNext() {
   if (!onbValidate()) return;
+  // Step 6 "no" → skip to submit
+  if (onbStep === 6 && onbState.solidsStarted === 'no') {
+    submitOnboarding(); return;
+  }
   if (onbStep < ONB_TOTAL) { onbStep++; renderOnbStep(); }
   else submitOnboarding();
 }
 
 function onbBack() {
+  // Step 7: back goes to step 6
   if (onbStep > 1) { onbStep--; renderOnbStep(); }
+}
+
+function onbSelectSolids(val, btn) {
+  onbState.solidsStarted = val;
+  btn.closest('.flex').querySelectorAll('.opt-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  // Update Done/Next label immediately
+  const next = document.getElementById('onb-next');
+  next.textContent = val === 'no' ? 'Done ✓' : 'Next →';
+}
+
+function onbAddFood() {
+  const input = document.getElementById('onb-food-input');
+  const val = input?.value?.trim();
+  if (!val) return;
+  // Support comma-separated entry
+  val.split(',').map(f => f.trim()).filter(Boolean).forEach(f => {
+    if (!onbState.foodsIntroduced.includes(f)) onbState.foodsIntroduced.push(f);
+  });
+  if (input) input.value = '';
+  document.getElementById('onb-food-tags').innerHTML =
+    onbState.foodsIntroduced.map((f,i) =>
+      `<span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium" style="background:#FEF3C7;color:#92400E">
+        ${escHtml(f)}<button onclick="onbRemoveFood(${i})" class="ml-1 text-amber-600 hover:text-red-500 font-bold">×</button>
+      </span>`).join('');
+}
+
+function onbRemoveFood(i) {
+  onbState.foodsIntroduced.splice(i, 1);
+  document.getElementById('onb-food-tags').innerHTML =
+    onbState.foodsIntroduced.map((f,idx) =>
+      `<span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium" style="background:#FEF3C7;color:#92400E">
+        ${escHtml(f)}<button onclick="onbRemoveFood(${idx})" class="ml-1 text-amber-600 hover:text-red-500 font-bold">×</button>
+      </span>`).join('');
+}
+
+function onbAddActiveIntro() {
+  const foodInput = document.getElementById('onb-active-food');
+  const slotSel   = document.getElementById('onb-active-slot');
+  const food = foodInput?.value?.trim();
+  if (!food) return;
+  onbState.activeIntros.push({ food, day: 1, slotId: slotSel?.value || onbState.slots[0]?.label });
+  if (foodInput) foodInput.value = '';
+  onbRefreshActiveList();
+}
+
+function onbRemoveActiveIntro(i) {
+  onbState.activeIntros.splice(i, 1);
+  onbRefreshActiveList();
+}
+
+function onbRefreshActiveList() {
+  const container = document.getElementById('onb-active-list');
+  if (!container) return;
+  container.innerHTML = onbState.activeIntros.map((intro, i) => `
+    <div class="flex items-center gap-2 mb-2 p-3 rounded-xl bg-orange-50">
+      <div class="flex-1">
+        <div class="text-sm font-semibold text-gray-700">${escHtml(intro.food)}</div>
+        <div class="text-xs text-gray-400">${escHtml(intro.slotId)}</div>
+      </div>
+      <div class="flex items-center gap-1 text-sm font-bold" style="color:var(--peach)">
+        Day <input type="number" min="1" max="${onbState.exposureDays}" value="${intro.day}"
+          class="w-10 text-center border border-orange-200 rounded-lg px-1"
+          oninput="onbState.activeIntros[${i}].day=Math.max(1,Math.min(${onbState.exposureDays},+this.value||1))" />
+        / ${onbState.exposureDays}
+      </div>
+      <button onclick="onbRemoveActiveIntro(${i})" class="text-gray-300 hover:text-red-400 text-xl leading-none">×</button>
+    </div>`).join('');
 }
 
 function onbAddSlot() {
@@ -898,7 +1055,14 @@ async function submitOnboarding() {
   try {
     const r = await fetch('/api/profile', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ name: onbState.name.trim(), dob: onbState.dob, gender: onbState.gender, dietary: onbState.dietary, slots: onbState.slots }),
+      body: JSON.stringify({
+        name: onbState.name.trim(), dob: onbState.dob, gender: onbState.gender,
+        dietary: onbState.dietary, slots: onbState.slots,
+        solidsStarted: onbState.solidsStarted,
+        foodsIntroduced: onbState.foodsIntroduced,
+        exposureDays: onbState.exposureDays,
+        activeIntros: onbState.activeIntros,
+      }),
     });
     const data = await r.json();
     if (!data.success) throw new Error(data.error || 'Save failed');

@@ -539,16 +539,33 @@ No intro text. No numbering. Just the 5 lines.`;
   }
 });
 
-// Parse FOODS-TRIED.md for active 5-day introductions (Pending + exact date)
-function getActive5DayIntros() {
+// Parse FOODS-TRIED.md for active introductions (Pending + exact date)
+// Uses profile slot labels/ids for section header detection
+function getActive5DayIntros(profile) {
+  const p       = profile || loadProfile();
+  const expDays = p.exposureDays || 5;
   const content = rf(path.join(GORDON_DIR, 'FOODS-TRIED.md'));
   const active  = {};
   let currentSlot = '';
 
+  // Build header → slotId map from profile (label and id both match)
+  const headerMap = {};
+  p.slots.forEach(s => {
+    headerMap[s.label.toLowerCase()] = s.id;
+    headerMap[s.id.toLowerCase().replace(/_/g,' ')] = s.id;
+    headerMap[s.id.toLowerCase()] = s.id;
+  });
+  // Legacy Saahiti mappings
+  if (!headerMap['cs1']) headerMap['cs1'] = p.slots[0]?.id || 'cs1';
+  if (!headerMap['lunch']) headerMap['lunch'] = p.slots[1]?.id || 'lunch';
+  if (!headerMap['cs2']) headerMap['cs2'] = p.slots[2]?.id || 'cs2';
+
   for (const line of content.split('\n')) {
-    if      (line.startsWith('## CS1'))   currentSlot = 'cs1';
-    else if (line.startsWith('## Lunch')) currentSlot = 'lunch';
-    else if (line.startsWith('## CS2'))   currentSlot = 'cs2';
+    if (line.startsWith('## ')) {
+      const header = line.slice(3).split('—')[0].trim().toLowerCase();
+      // Find first matching slot key inside the header string
+      currentSlot = Object.entries(headerMap).find(([k]) => header.includes(k))?.[1] || '';
+    }
 
     if (!line.startsWith('|') || line.includes('Food') || line.includes('---')) continue;
     const parts = line.split('|').map(x => x.trim()).filter(Boolean);
@@ -564,11 +581,68 @@ function getActive5DayIntros() {
     const today     = new Date(tod());
     const dayNum    = Math.floor((today - introDate) / 86400000) + 1;
 
-    if (dayNum >= 1 && dayNum <= 5) {
-      active[currentSlot] = { food, slot: currentSlot, dayNumber: dayNum, daysRemaining: 5 - dayNum, introDate: dateMatch[1] };
+    if (dayNum >= 1 && dayNum <= expDays) {
+      const slotKey = currentSlot || p.slots[0]?.id || 'snack1';
+      active[slotKey] = { food, slot: slotKey, dayNumber: dayNum, daysRemaining: expDays - dayNum, introDate: dateMatch[1] };
     }
   }
   return active;
+}
+
+// Write initial FOODS-TRIED.md from onboarding data
+function writeFoodsTriedFromOnboarding(profile, foodsIntroduced, activeIntros) {
+  const today  = tod();
+  const p      = profile;
+  let md = `# FOODS-TRIED.md\n\nLast updated: ${today}\n\n`;
+
+  // Group all foods (introduced + active) by slot if known, else generic
+  const bySlot = {};
+  p.slots.forEach(s => { bySlot[s.id] = []; });
+  const unslotted = [];
+
+  for (const food of foodsIntroduced) {
+    if (food?.trim()) unslotted.push({ food: food.trim(), date: `~${today}`, reaction: 'None', notes: 'Introduced before onboarding' });
+  }
+
+  for (const intro of activeIntros) {
+    if (!intro.food?.trim()) continue;
+    const introDate = new Date();
+    introDate.setDate(introDate.getDate() - (intro.day - 1));
+    const introDateStr = introDate.toISOString().split('T')[0];
+    const entry = { food: intro.food.trim(), date: introDateStr, reaction: 'Pending', notes: `Day ${intro.day} of ${p.exposureDays || 5}` };
+    // Match slotId by id OR label
+    const matchedSlot = p.slots.find(s => s.id === intro.slotId || s.label === intro.slotId);
+    if (matchedSlot && bySlot[matchedSlot.id]) {
+      bySlot[matchedSlot.id].push(entry);
+    } else {
+      unslotted.push(entry);
+    }
+  }
+
+  // Write slot sections
+  for (const slot of p.slots) {
+    const entries = bySlot[slot.id] || [];
+    md += `## ${slot.label}\n`;
+    md += `| Food | First Introduced | Reaction | Notes |\n`;
+    md += `|------|-----------------|----------|-------|\n`;
+    for (const e of entries) {
+      md += `| ${e.food} | ${e.date} | ${e.reaction} | ${e.notes} |\n`;
+    }
+    md += '\n';
+  }
+
+  // Unslotted foods
+  if (unslotted.length) {
+    md += `## General\n`;
+    md += `| Food | First Introduced | Reaction | Notes |\n`;
+    md += `|------|-----------------|----------|-------|\n`;
+    for (const e of unslotted) {
+      md += `| ${e.food} | ${e.date} | ${e.reaction} | ${e.notes} |\n`;
+    }
+    md += '\n';
+  }
+
+  wf(path.join(GORDON_DIR, 'FOODS-TRIED.md'), md);
 }
 
 const SCHEDULED_PATH = path.join(GORDON_DIR, 'SCHEDULED-MEALS.json');
@@ -586,11 +660,10 @@ app.post('/api/schedule-meal', (req, res) => {
 // GET /api/today-suggestion — pre-populated menu for Today tab
 // Priority: scheduled meal > active 5-day intro > roadmap food for current week > Gordon fallback
 app.get('/api/today-suggestion', async (req, res) => {
-  const today   = tod();
-  const active  = getActive5DayIntros();
-  const sched   = (rj(SCHEDULED_PATH) || {})[today] || {};
-
+  const today      = tod();
   const profile    = loadProfile();
+  const active     = getActive5DayIntros(profile);
+  const sched      = (rj(SCHEDULED_PATH) || {})[today] || {};
   const allSlotIds = profile.slots.map(s => s.id);
 
   // Slots needing a suggestion (not scheduled and not in active 5-day)
@@ -985,7 +1058,7 @@ app.get('/api/profile', (req, res) => {
 });
 
 app.post('/api/profile', (req, res) => {
-  const { name, dob, gender, dietary, slots } = req.body;
+  const { name, dob, gender, dietary, slots, solidsStarted, foodsIntroduced, exposureDays, activeIntros } = req.body;
   if (!name?.trim() || !dob || !gender || !dietary || !slots?.length)
     return res.status(400).json({ error: 'Missing required fields' });
 
@@ -999,11 +1072,20 @@ app.post('/api/profile', (req, res) => {
   const profile = {
     name: name.trim(), dob, gender, dietary,
     slots: processedSlots,
-    solidsStartedAt: new Date().toISOString().split('T')[0],
+    exposureDays: Number(exposureDays) || 5,
+    solidsStartedAt: solidsStarted === 'yes' ? new Date().toISOString().split('T')[0] : null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
   wj(PROFILE_PATH, profile);
+
+  // Write FOODS-TRIED.md if onboarding provided food history
+  const tried   = Array.isArray(foodsIntroduced) ? foodsIntroduced.filter(Boolean) : [];
+  const actives = Array.isArray(activeIntros)    ? activeIntros.filter(a => a.food?.trim()) : [];
+  if (tried.length || actives.length) {
+    writeFoodsTriedFromOnboarding(profile, tried, actives);
+  }
+
   // Clear roadmap so it regenerates for the new baby's profile
   try { fs.unlinkSync(ROADMAP_PATH); } catch {}
   res.json({ success: true, profile });
