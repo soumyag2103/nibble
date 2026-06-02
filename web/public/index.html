@@ -1853,13 +1853,31 @@ function renderThemeDetailHTML(theme, milestones, achievements, age) {
   if (upcomingMs.length > 0) {
     html += `<div class="ms-section-label" style="color:#6b7280;border-top:1px solid #f3f4f6">&#x25F7; Upcoming at ${age.months + 1} months &middot; ${upcomingMs.length} ahead</div>`;
     upcomingMs.forEach(m => {
+      const isExpanded = expandedMilestoneId === m.id;
+      const today = new Date().toISOString().split('T')[0];
       html += `
-        <div class="ms-milestone-card upcoming" style="padding:9px 12px;display:flex;align-items:center;gap:8px">
-          <div style="width:18px;height:18px;border-radius:50%;border:2px dashed #d1d5db;flex-shrink:0"></div>
-          <div style="flex:1">
-            <div style="font-size:12px;color:#6b7280;font-weight:500">${escHtml(m.label)}</div>
-            <div style="font-size:10px;color:#9ca3af">Expected at: ${Number(m.month)}m</div>
+        <div class="ms-milestone-card upcoming"${isExpanded ? ' style="opacity:1"' : ''}>
+          <div onclick="toggleMilestoneCard('${escAttr(m.id)}')" style="padding:9px 12px;display:flex;align-items:center;gap:8px;cursor:pointer">
+            <div style="width:18px;height:18px;border-radius:50%;border:2px dashed #d1d5db;flex-shrink:0"></div>
+            <div style="flex:1">
+              <div style="font-size:12px;color:#6b7280;font-weight:500">${escHtml(m.label)}</div>
+              <div style="font-size:10px;color:#9ca3af">Expected at: ${Number(m.month)}m</div>
+            </div>
           </div>
+          ${isExpanded ? `
+          <div onclick="event.stopPropagation()" style="border-top:1px solid #e5e7eb;padding:10px 12px;background:#fafafa">
+            <label style="font-size:10px;color:#6b7280;font-weight:600;display:block;margin-bottom:3px">Date achieved</label>
+            <input type="date" id="ms-exp-date-${escAttr(m.id)}" value="${today}"
+              style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:5px 8px;font-size:12px;margin-bottom:7px;box-sizing:border-box">
+            <label style="font-size:10px;color:#6b7280;font-weight:600;display:block;margin-bottom:3px">Notes</label>
+            <textarea id="ms-exp-notes-${escAttr(m.id)}" rows="2"
+              style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:5px 8px;font-size:12px;resize:none;margin-bottom:7px;box-sizing:border-box"
+              placeholder="What did you observe?"></textarea>
+            <button id="ms-exp-btn-${escAttr(m.id)}" onclick="completeMilestone('${escAttr(m.id)}','${escAttr(m.label)}','${escAttr(m.category)}',${Number(m.month)},true)"
+              style="width:100%;background:#16a34a;color:#fff;border:none;border-radius:10px;padding:7px;font-size:12px;font-weight:600;cursor:pointer">
+              Mark as completed
+            </button>
+          </div>` : ''}
         </div>`;
     });
   }
