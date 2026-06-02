@@ -1247,6 +1247,60 @@ async function sendChat() {
   msgs.scrollTop = msgs.scrollHeight;
 }
 
+function renderActionCard(action, payload) {
+  if (!payload) return '';
+  const id = 'card-' + Date.now();
+
+  if (action === 'log_food') {
+    const { food = '', date = '', slot = 'General' } = payload;
+    return `<div class="action-card" id="${id}">
+      <div class="action-card-title">🍽 Log this food?</div>
+      <div class="action-card-body">
+        <input class="action-card-field" id="${id}-food" value="${escHtml(food)}" placeholder="Food name" />
+        <input class="action-card-field" id="${id}-slot" value="${escHtml(slot)}" placeholder="Slot (Lunch / Morning Snack / etc)" />
+        <input class="action-card-field" id="${id}-date" value="${date}" placeholder="Date (YYYY-MM-DD)" />
+      </div>
+      <div class="action-card-btns">
+        <button class="btn-confirm" onclick="confirmFoodLog('${id}')">Confirm</button>
+        <button class="btn-edit" onclick="void 0">Edit</button>
+      </div>
+    </div>`;
+  }
+
+  if (action === 'log_milestone') {
+    const { milestone = '', date = '', time = '', notes = '' } = payload;
+    return `<div class="action-card" id="${id}">
+      <div class="action-card-title">🌟 Log this milestone?</div>
+      <div class="action-card-body">
+        <input class="action-card-field" id="${id}-milestone" value="${escHtml(milestone)}" placeholder="Milestone description" />
+        <input class="action-card-field" id="${id}-date" value="${date}" placeholder="Date (YYYY-MM-DD)" />
+        <input class="action-card-field" id="${id}-time" value="${escHtml(time)}" placeholder="Time (e.g. morning, 10am)" />
+        <input class="action-card-field" id="${id}-notes" value="${escHtml(notes)}" placeholder="Notes" />
+      </div>
+      <div class="action-card-btns">
+        <button class="btn-confirm" onclick="confirmMilestone('${id}')">Confirm</button>
+        <button class="btn-edit" onclick="void 0">Edit</button>
+      </div>
+    </div>`;
+  }
+
+  if (action === 'log_doctor_question') {
+    const { question = '' } = payload;
+    return `<div class="action-card" id="${id}">
+      <div class="action-card-title">📋 Add to doctor visit questions?</div>
+      <div class="action-card-body">
+        <input class="action-card-field" id="${id}-question" value="${escHtml(question)}" placeholder="Question for doctor" />
+      </div>
+      <div class="action-card-btns">
+        <button class="btn-confirm" onclick="confirmDoctorQuestion('${id}')">Confirm</button>
+        <button class="btn-edit" onclick="void 0">Edit</button>
+      </div>
+    </div>`;
+  }
+
+  return '';
+}
+
 // ── PLANS TAB ────────────────────────────────────────────────────────────────
 let plansSelectedMonth = null;
 let weekPlanCache = {}; // "month-week" → plan data (in-memory mirror of server cache)
