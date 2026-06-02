@@ -1652,7 +1652,7 @@ function renderMilestones() {
           <div class="ms-table-row${isActive ? ' active' : ''}" onclick="openThemeDetail('${theme.key}')">
             <span style="font-size:13px;font-weight:500;${isActive ? 'color:#f97316' : ''}">${theme.emoji} ${theme.label}${isActive ? ' \u25C4' : ''}</span>
             <span style="text-align:center;font-size:13px">${dueMs.length}</span>
-            <span style="text-align:center;font-size:13px;${achieved.length > 0 ? 'color:#16a34a;font-weight:600' : 'color:#9ca3af'}">${achieved.length > 0 ? achieved.length : '\u2014'}</span>
+            <span style="text-align:center;font-size:13px;${achieved.length > 0 ? 'color:#16a34a;font-weight:600' : 'color:#9ca3af'}">${achieved.length}</span>
             <span style="text-align:center;font-size:13px;${ahead.length > 0 ? 'color:#f97316;font-weight:600' : 'color:#6b7280'}">${ahead.length > 0 ? ahead.length : '\u2014'}</span>
           </div>`;
       }).join('')}
@@ -1817,7 +1817,7 @@ function renderPendingCardHTML(m, age) {
   }
 
   let cardHTML = `
-    <div class="ms-milestone-card${nearCutoff ? ' pending-urgent' : ''}">
+    <div class="ms-milestone-card${(nearCutoff || pastCutoff) ? ' pending-urgent' : ''}">
       <div style="padding:10px 12px;display:flex;align-items:flex-start;gap:8px">
         <div style="width:18px;height:18px;border-radius:50%;border:2px solid #d1d5db;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">
           <span style="color:#d1d5db;font-size:10px">&#x25CB;</span>
