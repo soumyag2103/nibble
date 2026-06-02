@@ -327,6 +327,11 @@
         placeholder="e.g. She waved bye-bye when grandma left today…"
         class="w-full bg-gray-50 rounded-xl px-3 py-2 text-sm border border-gray-100 resize-none"
         rows="3"></textarea>
+      <div class="mt-2">
+        <label class="text-xs text-gray-500 font-medium">Date achieved</label>
+        <input id="ms-date" type="date"
+          class="w-full bg-gray-50 rounded-xl px-3 py-2 text-sm border border-gray-100 mt-1">
+      </div>
       <div class="flex gap-2 mt-3">
         <button onclick="analyzeMilestone()" id="ms-analyze-btn"
           class="flex-1 py-2 rounded-xl text-white text-sm font-semibold" style="background:var(--peach)">
@@ -2000,6 +2005,7 @@ async function deleteMilestone(id) {
 }
 
 function openMilestoneForm() {
+  document.getElementById('ms-date').value = new Date().toISOString().split('T')[0];
   document.getElementById('ms-form').classList.remove('hidden');
   document.getElementById('ms-form').scrollIntoView({ behavior:'smooth' });
 }
@@ -2007,6 +2013,7 @@ function openMilestoneForm() {
 function closeMilestoneForm() {
   document.getElementById('ms-form').classList.add('hidden');
   document.getElementById('ms-text').value = '';
+  document.getElementById('ms-date').value = '';
   document.getElementById('ms-analysis-result').classList.add('hidden');
   document.getElementById('ms-analysis-result').innerHTML = '';
 }
@@ -2095,9 +2102,12 @@ async function confirmSaveMilestone() {
   const pending = JSON.parse(result.dataset.pending || '{}');
   if (!pending.name) return;
 
+  const dateLogged = document.getElementById('ms-date').value
+                     || new Date().toISOString().split('T')[0];
+
   await fetch('/api/milestone-achievements', {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify(pending)
+    body: JSON.stringify({ ...pending, dateLogged })
   });
   achievementsData = await fetch('/api/milestone-achievements').then(r=>r.json());
   renderMilestones();
