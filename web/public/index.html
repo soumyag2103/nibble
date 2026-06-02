@@ -1787,7 +1787,8 @@ function renderThemeDetailHTML(theme, milestones, achievements, age) {
 function renderPendingCardHTML(m, age) {
   const cutoff    = MILESTONE_CUTOFFS[m.id];
   const hasCutoff = cutoff !== null && cutoff !== undefined;
-  const nearCutoff = hasCutoff && (cutoff - age.months) <= 2;
+  const pastCutoff = hasCutoff && age.months >= cutoff;
+  const nearCutoff = hasCutoff && !pastCutoff && (cutoff - age.months) <= 2;
 
   let timelineHTML = '';
   if (hasCutoff) {
@@ -1825,7 +1826,7 @@ function renderPendingCardHTML(m, age) {
   if (nearCutoff) {
     cardHTML += `
       <div style="border-top:1px solid #fca5a5;padding:8px 12px;background:#fff5f5;display:flex;align-items:center;justify-content:space-between">
-        <span style="font-size:11px;color:#dc2626">Getting close to cutoff</span>
+        <span style="font-size:11px;color:#dc2626">${pastCutoff ? 'Past recommended window' : 'Getting close to cutoff'}</span>
         <button class="ms-ask-doctor-btn" onclick="askDoctorAbout('${escAttr(m.label)}')">+ Ask doctor</button>
       </div>`;
   }
@@ -2027,7 +2028,7 @@ function escHtml(t) {
   return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
 }
 function escAttr(t) {
-  return String(t).replace(/'/g,"\\'").replace(/"/g,'&quot;');
+  return String(t).replace(/&/g,'&amp;').replace(/'/g,'&#39;').replace(/"/g,'&quot;');
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
