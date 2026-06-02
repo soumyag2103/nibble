@@ -1301,6 +1301,76 @@ function renderActionCard(action, payload) {
   return '';
 }
 
+async function confirmFoodLog(cardId) {
+  const food  = document.getElementById(`${cardId}-food`)?.value.trim();
+  const slot  = document.getElementById(`${cardId}-slot`)?.value.trim();
+  const date  = document.getElementById(`${cardId}-date`)?.value.trim();
+  if (!food || !date) return;
+
+  const card = document.getElementById(cardId);
+  if (card) card.innerHTML = `<div class="text-xs text-gray-400 py-2">Saving...</div>`;
+
+  const resp = await fetch('/api/log-food', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ food, slot, date }),
+  }).then(r => r.json());
+
+  if (card) {
+    card.innerHTML = resp.ok
+      ? `<div class="text-xs text-green-500 py-2">✓ ${escHtml(food)} logged for ${escHtml(slot || 'General')} on ${date}</div>`
+      : `<div class="text-xs text-red-400 py-2">Error saving. Try again.</div>`;
+  }
+
+  tabLoaded.today = false;
+  tabLoaded.plans = false;
+}
+
+async function confirmMilestone(cardId) {
+  const milestone = document.getElementById(`${cardId}-milestone`)?.value.trim();
+  const date      = document.getElementById(`${cardId}-date`)?.value.trim();
+  const time      = document.getElementById(`${cardId}-time`)?.value.trim();
+  const notes     = document.getElementById(`${cardId}-notes`)?.value.trim();
+  if (!milestone || !date) return;
+
+  const card = document.getElementById(cardId);
+  if (card) card.innerHTML = `<div class="text-xs text-gray-400 py-2">Saving...</div>`;
+
+  const resp = await fetch('/api/log-milestone', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ milestone, date, time, notes }),
+  }).then(r => r.json());
+
+  if (card) {
+    card.innerHTML = resp.ok
+      ? `<div class="text-xs text-green-500 py-2">✓ Milestone logged: ${escHtml(milestone)}</div>`
+      : `<div class="text-xs text-red-400 py-2">Error saving. Try again.</div>`;
+  }
+
+  tabLoaded.milestones = false;
+}
+
+async function confirmDoctorQuestion(cardId) {
+  const question = document.getElementById(`${cardId}-question`)?.value.trim();
+  if (!question) return;
+
+  const card = document.getElementById(cardId);
+  if (card) card.innerHTML = `<div class="text-xs text-gray-400 py-2">Saving...</div>`;
+
+  const resp = await fetch('/api/log-doctor-question', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question }),
+  }).then(r => r.json());
+
+  if (card) {
+    card.innerHTML = resp.ok
+      ? `<div class="text-xs text-green-500 py-2">✓ Added to doctor visit questions (#${resp.questionNumber})</div>`
+      : `<div class="text-xs text-red-400 py-2">Error saving. Try again.</div>`;
+  }
+}
+
 // ── PLANS TAB ────────────────────────────────────────────────────────────────
 let plansSelectedMonth = null;
 let weekPlanCache = {}; // "month-week" → plan data (in-memory mirror of server cache)
