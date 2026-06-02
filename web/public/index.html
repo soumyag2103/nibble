@@ -167,6 +167,28 @@
     .today-pip { background:var(--peach); color:#fff; border-radius:4px; padding:1px 5px; font-size:9px; font-weight:700; letter-spacing:0.06em; vertical-align:middle; margin-right:3px; }
     .meal-plan-card { border-radius:14px; padding:10px 12px; margin-bottom:6px; }
     .meal-plan-card:last-child { margin-bottom:0; }
+
+    /* Milestones redesign */
+    .ms-scope-btn        { flex:1; padding:6px 0; border-radius:20px; font-size:12px; font-weight:600; cursor:pointer; transition:all 0.15s; }
+    .ms-scope-btn.active { background:var(--peach); color:#fff; border:none; }
+    .ms-scope-btn.inactive { background:#fff; color:#6b7280; border:1px solid #e5e7eb; }
+    .ms-table            { border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; margin-bottom:14px; }
+    .ms-table-header     { display:grid; grid-template-columns:1.4fr 1fr 1fr 1fr; background:#f9fafb; padding:6px 10px; font-size:10px; color:#6b7280; font-weight:600; text-transform:uppercase; letter-spacing:0.04em; }
+    .ms-table-row        { display:grid; grid-template-columns:1.4fr 1fr 1fr 1fr; padding:9px 10px; border-top:1px solid #f3f4f6; cursor:pointer; transition:background 0.15s; }
+    .ms-table-row:hover  { background:#fff8f5; }
+    .ms-table-row.active { background:#fff8f5; }
+    .ms-detail           { border:1.5px solid #f97316; border-radius:12px; overflow:hidden; }
+    .ms-detail-header    { background:#fff8f5; padding:10px 14px; border-bottom:1px solid #fed7aa; display:flex; align-items:center; justify-content:space-between; }
+    .ms-section-label    { padding:10px 14px 6px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; }
+    .ms-milestone-card   { margin:0 10px 7px; border:1px solid #e5e7eb; border-radius:10px; overflow:hidden; }
+    .ms-milestone-card.ahead { border-color:#fed7aa; background:#fffbeb; }
+    .ms-milestone-card.pending-urgent { border:1.5px solid #fca5a5; }
+    .ms-milestone-card.upcoming { border:1px dashed #e5e7eb; opacity:0.75; }
+    .ms-timeline-bar     { background:#f3f4f6; border-radius:4px; height:5px; position:relative; margin-top:8px; }
+    .ms-timeline-fill    { background:linear-gradient(to right,#16a34a,#f97316,#dc2626); border-radius:4px; height:100%; width:100%; }
+    .ms-timeline-marker  { position:absolute; top:-3px; width:2px; height:11px; background:#1a1a1a; border-radius:1px; }
+    .ms-now-label        { position:absolute; top:-14px; font-size:8px; font-weight:600; transform:translateX(-50%); }
+    .ms-ask-doctor-btn   { background:var(--peach); color:#fff; border:none; border-radius:12px; padding:4px 10px; font-size:11px; font-weight:600; cursor:pointer; }
   </style>
 </head>
 <body class="min-h-screen pb-24">
@@ -408,6 +430,8 @@ let pendingAction = null; // { action, payload, followUpStage }
 let roadmapData   = null;
 let milestonesData  = null;
 let achievementsData = [];
+let activeTheme      = null;   // 'Motor'|'Language'|'Social'|'Cognitive'|'Feeding'|null
+let milestoneScope   = 'month'; // 'month'|'all'
 let tabLoaded = { today: false, chat: false, plans: false, milestones: false, progress: false };
 
 
@@ -419,6 +443,45 @@ const DIETARY_OPTIONS = [
   ['pescatarian',   '🐟 Pescatarian'],
   ['non-vegetarian','🍗 Non-veg'],
 ];
+const THEMES = [
+  { key:'Motor',     emoji:'🏃', label:'Motor' },
+  { key:'Language',  emoji:'🗣', label:'Language' },
+  { key:'Social',    emoji:'💬', label:'Social' },
+  { key:'Cognitive', emoji:'🧠', label:'Cognitive' },
+  { key:'Feeding',   emoji:'🥄', label:'Feeding' },
+];
+
+const MILESTONE_CUTOFFS = {
+  // Motor
+  'm5_1': 7,  'm5_2': 7,  'm5_3': 8,
+  'm6_1': 8,  'm6_2': 8,  'm6_3': 7,
+  'm7_1': 9,  'm7_2': 10, 'm7_3': 12, 'm7_4': 12,
+  'm8_1': 12, 'm8_2': 12, 'm8_3': 12,
+  'm9_1': 14, 'm9_2': 12,
+  // Language
+  'm5_4': 9,  'm5_5': 7,
+  'm6_5': 8,
+  'm7_7': 10, 'm7_8': 9,
+  'm8_4': 12, 'm8_5': 12,
+  'm9_3': 14, 'm9_4': 12, 'm9_5': 12,
+  // Social
+  'm6_4': null, 'm6_7': 9,
+  'm7_5': null, 'm7_6': null,
+  'm8_7': 12,
+  'm9_7': 12,
+  // Cognitive
+  'm6_8': 9,
+  'm7_9': 10, 'm7_10': 9,
+  'm8_6': 12,
+  'm9_6': 12,
+  // Feeding
+  'm5_6': 7,
+  'm6_6': 8,
+  'm7_11': 10,
+  'm8_8': 12,
+  'm9_8': 14,
+};
+
 let SLOT_META = {};
 
 function buildSlotMeta(slots) {
