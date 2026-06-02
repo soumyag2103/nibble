@@ -643,6 +643,60 @@ app.post('/api/log-food', (req, res) => {
   res.json({ ok: true });
 });
 
+// Task 4: Log a developmental milestone via Uma chat
+app.post('/api/log-milestone', async (req, res) => {
+  const { milestone, date, time, notes } = req.body;
+  if (!milestone || !date) return res.status(400).json({ error: 'milestone and date required' });
+
+  const profile = loadProfile();
+  const age = getBabyAge(profile);
+
+  let benchmarkRange = 'Unknown';
+  let statusVsRange  = 'Logged via Uma';
+  try {
+    const classify = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{
+        role: 'user',
+        content: `Baby is ${age.label} old (DOB: ${profile.dob}). Milestone: "${milestone}".
+Return ONLY JSON: {"benchmarkRange":"<e.g. 6-8m>","statusVsRange":"<Within range|AHEAD of range|SIGNIFICANTLY AHEAD|Behind range>"}
+Use WHO/AAP developmental milestone norms. If unknown, use "Unknown" for both.`,
+      }],
+      max_tokens: 80,
+    });
+    const parsed = JSON.parse(classify.choices[0].message.content.trim());
+    benchmarkRange = parsed.benchmarkRange || 'Unknown';
+    statusVsRange  = parsed.statusVsRange  || 'Logged via Uma';
+  } catch { /* keep defaults */ }
+
+  const milestonePath = path.join(MEREDITH_DIR, 'MILESTONE-LOG.md');
+  let content = rf(milestonePath);
+
+  const timeLabel  = time  ? `, ${time}` : '';
+  const notesText  = notes ? notes       : 'Logged via Uma';
+  const newRow = `| ${milestone} | ${benchmarkRange} | ${statusVsRange} | ${date}${timeLabel} | ${notesText} |`;
+
+  const tableHeader = '| Milestone | Benchmark Range | Status vs Range | Date Logged | Notes |';
+  if (content.includes(tableHeader)) {
+    const lines = content.split('\n');
+    const headerIdx = lines.findIndex(l => l.includes(tableHeader));
+    let insertIdx = headerIdx + 2;
+    for (let i = headerIdx + 2; i < lines.length; i++) {
+      if (lines[i].startsWith('|')) { insertIdx = i + 1; } else { break; }
+    }
+    lines.splice(insertIdx, 0, newRow);
+    content = lines.join('\n');
+  } else {
+    content += `\n\n## Achieved Milestones\n${tableHeader}\n|-----------|----------------|----------------|-------------|-------|\n${newRow}`;
+  }
+
+  content = content.replace(/^Last updated:.*$/m, `Last updated: ${tod()}`);
+  content = content.replace(/^Saahiti's age at last update:.*$/m,
+    `Saahiti's age at last update: ${age.months} months, ${age.days} days`);
+  wf(milestonePath, content);
+  res.json({ ok: true, benchmarkRange, statusVsRange });
+});
+
 // Variants for a disliked food
 app.get('/api/variants/:food', async (req, res) => {
   const foodName = decodeURIComponent(req.params.food);
