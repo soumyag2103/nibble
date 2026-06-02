@@ -1147,10 +1147,10 @@ app.get('/api/milestone-achievements', (req, res) => {
 });
 
 app.post('/api/milestone-achievements', (req, res) => {
-  const { id, name, category, month, status, notes } = req.body;
+  const { id, name, category, month, status, notes, dateLogged } = req.body;
   const data   = rj(ACHIEVEMENTS_PATH) || [];
   const today  = tod();
-  const entry  = { id, name, category, month, status: status || 'within', notes: notes || '', dateLogged: today };
+  const entry  = { id, name, category, month, status: status || 'within', notes: notes || '', dateLogged: dateLogged || today };
   const idx    = data.findIndex(a => a.id === id);
   if (idx >= 0) data[idx] = entry; else data.push(entry);
   wj(ACHIEVEMENTS_PATH, data);
