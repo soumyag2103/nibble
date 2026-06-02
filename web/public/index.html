@@ -1624,51 +1624,66 @@ async function loadMilestones() {
 
 function renderMilestones() {
   const { milestones, age } = milestonesData;
+
+  // Sync toggle button styles
+  document.getElementById('ms-btn-month').className = 'ms-scope-btn ' + (milestoneScope === 'month' ? 'active' : 'inactive');
+  document.getElementById('ms-btn-all').className   = 'ms-scope-btn ' + (milestoneScope === 'all'   ? 'active' : 'inactive');
+
+  // Build per-theme counts
   const achievedIds = new Set(achievementsData.map(a => a.id));
 
-  // Counts
-  const achievedCount  = achievementsData.length;
-  const aheadCount     = achievementsData.filter(a => a.status === 'ahead').length;
-  const sigCount       = achievementsData.filter(a => a.status === 'significantly_ahead').length;
-  document.getElementById('ms-achieved-count').textContent = achievedCount;
-  document.getElementById('ms-ahead-count').textContent    = aheadCount;
-  document.getElementById('ms-sig-count').textContent      = sigCount;
-
-  // Achieved list
-  const achievedEl = document.getElementById('ms-achieved-list');
-  achievedEl.innerHTML = achievementsData.length === 0
-    ? '<div class="text-xs text-gray-300">No milestones logged yet.</div>'
-    : achievementsData.slice().reverse().map(a => achievementCardHTML(a)).join('');
-
-  // Current month
-  const curMilestonesEl = document.getElementById('ms-current-list');
-  const curMonthMs = milestones.filter(m => m.month === age.months);
-  document.getElementById('ms-current-heading').textContent = `MONTH ${age.months} — CHECK IN`;
-  curMilestonesEl.innerHTML = curMonthMs.map(m => {
-    const done = achievedIds.has(m.id);
-    return `
-    <div class="card p-3 flex items-start gap-3 cursor-pointer" onclick="quickLogMilestone('${m.id}','${escAttr(m.label)}','${m.category}',${m.month})">
-      <div class="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center border-2 ${done ? 'bg-green-400 border-green-400' : 'border-gray-200'}" style="margin-top:2px">
-        ${done ? '<span class="text-white text-xs">✓</span>' : ''}
+  const tableHTML = `
+    <div class="ms-table">
+      <div class="ms-table-header">
+        <span>Theme</span>
+        <span style="text-align:center">Due</span>
+        <span style="text-align:center">Achieved</span>
+        <span style="text-align:center">Ahead+</span>
       </div>
-      <div>
-        <div class="text-sm ${done ? 'text-gray-400 line-through' : 'text-gray-700'}">${m.label}</div>
-        <div class="text-xs text-gray-400">${m.category}</div>
-      </div>
+      ${THEMES.map(theme => {
+        const dueMs    = milestones.filter(m => m.month === age.months && m.category === theme.key);
+        const achieved = dueMs.filter(m => achievedIds.has(m.id));
+        const ahead    = achievementsData.filter(a => {
+          const ms = milestones.find(m => m.id === a.id);
+          return ms && ms.category === theme.key && ms.month > age.months;
+        });
+        const isActive = activeTheme === theme.key;
+        return `
+          <div class="ms-table-row${isActive ? ' active' : ''}" onclick="openThemeDetail('${theme.key}')">
+            <span style="font-size:13px;font-weight:500;${isActive ? 'color:#f97316' : ''}">${theme.emoji} ${theme.label}${isActive ? ' \u25C4' : ''}</span>
+            <span style="text-align:center;font-size:13px">${dueMs.length}</span>
+            <span style="text-align:center;font-size:13px;${achieved.length > 0 ? 'color:#16a34a;font-weight:600' : 'color:#9ca3af'}">${achieved.length > 0 ? achieved.length : '\u2014'}</span>
+            <span style="text-align:center;font-size:13px;${ahead.length > 0 ? 'color:#f97316;font-weight:600' : 'color:#6b7280'}">${ahead.length > 0 ? ahead.length : '\u2014'}</span>
+          </div>`;
+      }).join('')}
     </div>`;
-  }).join('');
 
-  // Upcoming (next month)
-  const nextMonthMs = milestones.filter(m => m.month === age.months + 1);
-  document.getElementById('ms-upcoming-heading').textContent = `MONTH ${age.months + 1} — COMING UP`;
-  document.getElementById('ms-upcoming-list').innerHTML = nextMonthMs.map(m => `
-    <div class="card p-3 flex items-start gap-3 opacity-70">
-      <div class="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center border-2 border-dashed border-gray-200" style="margin-top:2px"></div>
-      <div>
-        <div class="text-sm text-gray-500">${m.label}</div>
-        <div class="text-xs text-gray-400">${m.category}</div>
-      </div>
-    </div>`).join('');
+  document.getElementById('ms-summary-table').innerHTML = tableHTML;
+
+  // Detail panel
+  const detailEl = document.getElementById('ms-detail-panel');
+  if (!activeTheme) {
+    detailEl.innerHTML = '';
+    return;
+  }
+  detailEl.innerHTML = renderThemeDetailHTML(activeTheme, milestones, achievementsData, age);
+}
+
+function openThemeDetail(theme) {
+  activeTheme = (activeTheme === theme) ? null : theme;
+  renderMilestones();
+  if (activeTheme) {
+    setTimeout(() => document.getElementById('ms-detail-panel').scrollIntoView({ behavior:'smooth', block:'start' }), 50);
+  }
+}
+
+function setMilestoneScope(scope) {
+  milestoneScope = scope;
+  renderMilestones();
+}
+
+function renderThemeDetailHTML(theme, milestones, achievements, age) {
+  return `<div class="ms-detail"><div class="ms-detail-header"><div style="font-size:13px;font-weight:700">Loading ${theme}\u2026</div><button onclick="openThemeDetail('${theme}')" style="border:none;background:none;font-size:16px;color:#9ca3af;cursor:pointer">\u2715</button></div></div>`;
 }
 
 function achievementCardHTML(a) {
