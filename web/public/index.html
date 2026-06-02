@@ -1767,26 +1767,33 @@ function renderThemeDetailHTML(theme, milestones, achievements, age) {
     html += `<div style="padding:8px 14px 12px;font-size:12px;color:#9ca3af">No achievements logged yet for this theme this month.</div>`;
   } else {
     achievedDue.forEach((a, i) => {
-      if (i === 0) {
-        html += `
-          <div class="ms-milestone-card" style="padding:10px 12px;display:flex;align-items:flex-start;gap:8px">
-            <div style="width:18px;height:18px;border-radius:50%;background:#16a34a;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px"><span style="color:#fff;font-size:10px">&#x2713;</span></div>
+      const isExpanded = expandedMilestoneId === a.id;
+      const today = new Date().toISOString().split('T')[0];
+      html += `
+        <div class="ms-milestone-card">
+          <div onclick="toggleMilestoneCard('${escAttr(a.id)}')" style="padding:${i === 0 ? '10px' : '9px'} 12px;display:flex;align-items:${i === 0 ? 'flex-start' : 'center'};gap:8px;cursor:pointer">
+            <div style="width:18px;height:18px;border-radius:50%;background:#16a34a;display:flex;align-items:center;justify-content:center;flex-shrink:0;${i === 0 ? 'margin-top:1px' : ''}"><span style="color:#fff;font-size:10px">&#x2713;</span></div>
             <div style="flex:1">
               <div style="font-size:13px;font-weight:600">${escHtml(a.name)}</div>
-              <div style="font-size:11px;color:#6b7280;margin-top:2px">Logged ${escHtml(a.dateLogged)} &middot; On track</div>
-              ${a.notes ? `<div style="font-size:11px;color:#374151;margin-top:5px;padding:6px 8px;background:#f9fafb;border-radius:6px;font-style:italic">&ldquo;${escHtml(a.notes)}&rdquo;</div>` : ''}
+              <div style="font-size:11px;color:#6b7280;margin-top:${i === 0 ? '2' : '1'}px">Logged ${escHtml(a.dateLogged)} &middot; On track</div>
+              ${i === 0 && a.notes ? `<div style="font-size:11px;color:#374151;margin-top:5px;padding:6px 8px;background:#f9fafb;border-radius:6px;font-style:italic">&ldquo;${escHtml(a.notes)}&rdquo;</div>` : ''}
             </div>
-          </div>`;
-      } else {
-        html += `
-          <div class="ms-milestone-card" style="padding:9px 12px;display:flex;align-items:center;gap:8px">
-            <div style="width:18px;height:18px;border-radius:50%;background:#16a34a;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="color:#fff;font-size:10px">&#x2713;</span></div>
-            <div style="flex:1">
-              <div style="font-size:13px;font-weight:600">${escHtml(a.name)}</div>
-              <div style="font-size:11px;color:#6b7280;margin-top:1px">Logged ${escHtml(a.dateLogged)} &middot; On track</div>
-            </div>
-          </div>`;
-      }
+          </div>
+          ${isExpanded ? `
+          <div onclick="event.stopPropagation()" style="border-top:1px solid #f3f4f6;padding:10px 12px;background:#fafafa">
+            <label style="font-size:10px;color:#6b7280;font-weight:600;display:block;margin-bottom:3px">Date logged</label>
+            <input type="date" id="ms-exp-date-${escAttr(a.id)}" value="${escAttr(a.dateLogged || today)}"
+              style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:5px 8px;font-size:12px;margin-bottom:7px;box-sizing:border-box">
+            <label style="font-size:10px;color:#6b7280;font-weight:600;display:block;margin-bottom:3px">Notes</label>
+            <textarea id="ms-exp-notes-${escAttr(a.id)}" rows="2"
+              style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:5px 8px;font-size:12px;resize:none;margin-bottom:7px;box-sizing:border-box"
+              placeholder="Add a note…">${escHtml(a.notes || '')}</textarea>
+            <button id="ms-exp-btn-${escAttr(a.id)}" onclick="saveMilestoneEdit('${escAttr(a.id)}')"
+              style="width:100%;background:#f97316;color:#fff;border:none;border-radius:10px;padding:7px;font-size:12px;font-weight:600;cursor:pointer">
+              Save
+            </button>
+          </div>` : ''}
+        </div>`;
     });
   }
 
@@ -1804,14 +1811,32 @@ function renderThemeDetailHTML(theme, milestones, achievements, age) {
     aheadAchievements.forEach(a => {
       const ms = milestones.find(m => m.id === a.id);
       const monthsEarly = ms ? ms.month - age.months : 0;
+      const isExpanded = expandedMilestoneId === a.id;
+      const today = new Date().toISOString().split('T')[0];
       html += `
-        <div class="ms-milestone-card ahead" style="padding:9px 12px;display:flex;align-items:center;gap:8px">
-          <span style="font-size:15px">&#x2B50;</span>
-          <div style="flex:1">
-            <div style="font-size:13px;font-weight:600">${escHtml(a.name)}</div>
-            <div style="font-size:11px;color:#6b7280;margin-top:1px">Typical: ${Number(ms ? ms.month : 0)}m &middot; Logged ${escHtml(a.dateLogged)}</div>
+        <div class="ms-milestone-card ahead">
+          <div onclick="toggleMilestoneCard('${escAttr(a.id)}')" style="padding:9px 12px;display:flex;align-items:center;gap:8px;cursor:pointer">
+            <span style="font-size:15px">&#x2B50;</span>
+            <div style="flex:1">
+              <div style="font-size:13px;font-weight:600">${escHtml(a.name)}</div>
+              <div style="font-size:11px;color:#6b7280;margin-top:1px">Typical: ${Number(ms ? ms.month : 0)}m &middot; Logged ${escHtml(a.dateLogged)}</div>
+            </div>
+            <div style="font-size:10px;color:#f97316;font-weight:600">${Number(monthsEarly)}m early</div>
           </div>
-          <div style="font-size:10px;color:#f97316;font-weight:600">${Number(monthsEarly)}m early</div>
+          ${isExpanded ? `
+          <div onclick="event.stopPropagation()" style="border-top:1px solid #fed7aa;padding:10px 12px;background:#fff8f0">
+            <label style="font-size:10px;color:#6b7280;font-weight:600;display:block;margin-bottom:3px">Date logged</label>
+            <input type="date" id="ms-exp-date-${escAttr(a.id)}" value="${escAttr(a.dateLogged || today)}"
+              style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:5px 8px;font-size:12px;margin-bottom:7px;box-sizing:border-box">
+            <label style="font-size:10px;color:#6b7280;font-weight:600;display:block;margin-bottom:3px">Notes</label>
+            <textarea id="ms-exp-notes-${escAttr(a.id)}" rows="2"
+              style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:5px 8px;font-size:12px;resize:none;margin-bottom:7px;box-sizing:border-box"
+              placeholder="Add a note…">${escHtml(a.notes || '')}</textarea>
+            <button id="ms-exp-btn-${escAttr(a.id)}" onclick="saveMilestoneEdit('${escAttr(a.id)}')"
+              style="width:100%;background:#f97316;color:#fff;border:none;border-radius:10px;padding:7px;font-size:12px;font-weight:600;cursor:pointer">
+              Save
+            </button>
+          </div>` : ''}
         </div>`;
     });
   }
