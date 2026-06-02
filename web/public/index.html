@@ -1689,11 +1689,13 @@ function toggleMilestoneCard(id) {
 }
 
 async function saveMilestoneEdit(id) {
-  const btn = document.getElementById('ms-exp-btn-' + id);
+  const btn      = document.getElementById('ms-exp-btn-' + id);
+  const dateElem = document.getElementById('ms-exp-date-' + id);
+  const notesElem = document.getElementById('ms-exp-notes-' + id);
+  if (!dateElem || !notesElem) return;
   if (btn) btn.disabled = true;
-  const date  = document.getElementById('ms-exp-date-' + id).value
-                || new Date().toISOString().split('T')[0];
-  const notes = document.getElementById('ms-exp-notes-' + id).value;
+  const date  = dateElem.value || new Date().toISOString().split('T')[0];
+  const notes = notesElem.value;
   const existing = achievementsData.find(a => a.id === id);
   if (!existing) return;
   await fetch('/api/milestone-achievements', {
@@ -1707,11 +1709,13 @@ async function saveMilestoneEdit(id) {
 }
 
 async function completeMilestone(id, name, category, month, isUpcoming) {
-  const btn = document.getElementById('ms-exp-btn-' + id);
+  const btn      = document.getElementById('ms-exp-btn-' + id);
+  const dateElem = document.getElementById('ms-exp-date-' + id);
+  const notesElem = document.getElementById('ms-exp-notes-' + id);
+  if (!dateElem || !notesElem) return;
   if (btn) btn.disabled = true;
-  const date  = document.getElementById('ms-exp-date-' + id).value
-                || new Date().toISOString().split('T')[0];
-  const notes = document.getElementById('ms-exp-notes-' + id).value;
+  const date  = dateElem.value || new Date().toISOString().split('T')[0];
+  const notes = notesElem.value;
   const status = isUpcoming ? 'ahead' : 'within';
   await fetch('/api/milestone-achievements', {
     method: 'POST',
