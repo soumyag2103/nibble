@@ -1698,14 +1698,18 @@ async function saveMilestoneEdit(id) {
   const notes = notesElem.value;
   const existing = achievementsData.find(a => a.id === id);
   if (!existing) return;
-  await fetch('/api/milestone-achievements', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...existing, dateLogged: date, notes }),
-  });
-  achievementsData = await fetch('/api/milestone-achievements').then(r => r.json());
-  expandedMilestoneId = null;
-  renderMilestones();
+  try {
+    await fetch('/api/milestone-achievements', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...existing, dateLogged: date, notes }),
+    });
+    achievementsData = await fetch('/api/milestone-achievements').then(r => r.json());
+    expandedMilestoneId = null;
+    renderMilestones();
+  } catch (e) {
+    if (btn) btn.disabled = false;
+  }
 }
 
 async function completeMilestone(id, name, category, month, isUpcoming) {
@@ -1717,14 +1721,18 @@ async function completeMilestone(id, name, category, month, isUpcoming) {
   const date  = dateElem.value || new Date().toISOString().split('T')[0];
   const notes = notesElem.value;
   const status = isUpcoming ? 'ahead' : 'within';
-  await fetch('/api/milestone-achievements', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id, name, category, month: Number(month), status, notes, dateLogged: date }),
-  });
-  if (btn) { btn.textContent = '✓ Saved!'; btn.style.background = '#16a34a'; }
-  achievementsData = await fetch('/api/milestone-achievements').then(r => r.json());
-  setTimeout(() => { expandedMilestoneId = null; renderMilestones(); }, 600);
+  try {
+    await fetch('/api/milestone-achievements', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, name, category, month: Number(month), status, notes, dateLogged: date }),
+    });
+    if (btn) { btn.textContent = '✓ Saved!'; btn.style.background = '#16a34a'; }
+    achievementsData = await fetch('/api/milestone-achievements').then(r => r.json());
+    setTimeout(() => { expandedMilestoneId = null; renderMilestones(); }, 600);
+  } catch (e) {
+    if (btn) btn.disabled = false;
+  }
 }
 
 function renderThemeDetailHTML(theme, milestones, achievements, age) {
