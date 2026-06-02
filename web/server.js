@@ -1159,7 +1159,7 @@ app.post('/api/milestone-achievements', (req, res) => {
   const logPath  = path.join(MEREDITH_DIR, 'MILESTONE-LOG.md');
   let logContent = rf(logPath);
   const statusLabel = { within:'Within range', ahead:'AHEAD of range', significantly_ahead:'SIGNIFICANTLY AHEAD' }[entry.status] || 'Within range';
-  const row = `| ${name} | ${month}m benchmark | ${statusLabel} | ${today} | ${notes || 'Logged via web dashboard'} |`;
+  const row = `| ${name} | ${month}m benchmark | ${statusLabel} | ${entry.dateLogged} | ${notes || 'Logged via web dashboard'} |`;
   logContent = logContent.replace('## Achieved Milestones\n\n| Milestone', `## Achieved Milestones\n\n| Milestone`)
     .replace(/(\| Milestone.*\n\|[-| ]+\n)/, `$1${row}\n`);
   wf(logPath, logContent);
