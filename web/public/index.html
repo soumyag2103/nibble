@@ -1745,18 +1745,11 @@ function renderThemeDetailHTML(theme, milestones, achievements, age) {
     });
   }
 
-  // ── Section 2: Still pending (placeholder — implemented in Task 5) ──
+  // ── Section 2: Still pending ──
   if (pendingDue.length > 0) {
     html += `<div class="ms-section-label" style="color:#dc2626;border-top:1px solid #f3f4f6">&#x25CB; Still pending &middot; ${pendingDue.length} of ${dueMs.length}</div>`;
     pendingDue.forEach(m => {
-      html += `
-        <div class="ms-milestone-card" style="padding:9px 12px;display:flex;align-items:center;gap:8px">
-          <div style="width:18px;height:18px;border-radius:50%;border:2px solid #d1d5db;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="color:#d1d5db;font-size:10px">&#x25CB;</span></div>
-          <div style="flex:1">
-            <div style="font-size:13px;font-weight:600">${escHtml(m.label)}</div>
-            <div style="font-size:11px;color:#6b7280;margin-top:1px">Not yet achieved</div>
-          </div>
-        </div>`;
+      html += renderPendingCardHTML(m, age);
     });
   }
 
@@ -1789,6 +1782,56 @@ function renderThemeDetailHTML(theme, milestones, achievements, age) {
 
   html += `</div>`;
   return html;
+}
+
+function renderPendingCardHTML(m, age) {
+  const cutoff    = MILESTONE_CUTOFFS[m.id];
+  const hasCutoff = cutoff !== null && cutoff !== undefined;
+  const nearCutoff = hasCutoff && (cutoff - age.months) <= 2;
+
+  let timelineHTML = '';
+  if (hasCutoff) {
+    const range = cutoff - m.month;
+    const markerPct = range > 0
+      ? Math.min(100, Math.max(0, Math.round(((age.months - m.month) / range) * 100)))
+      : 100;
+    timelineHTML = `
+      <div>
+        <div style="display:flex;justify-content:space-between;font-size:9px;color:#6b7280;margin-bottom:3px;margin-top:8px">
+          <span>Expected at: ${Number(m.month)}m</span>
+          <span style="${nearCutoff ? 'color:#dc2626;font-weight:600' : ''}">Discuss by ${Number(cutoff)}m</span>
+        </div>
+        <div class="ms-timeline-bar">
+          <div class="ms-timeline-fill"></div>
+          <div class="ms-timeline-marker" style="left:${markerPct}%"></div>
+          <div class="ms-now-label" style="left:${markerPct}%">now</div>
+        </div>
+      </div>`;
+  }
+
+  let cardHTML = `
+    <div class="ms-milestone-card${nearCutoff ? ' pending-urgent' : ''}">
+      <div style="padding:10px 12px;display:flex;align-items:flex-start;gap:8px">
+        <div style="width:18px;height:18px;border-radius:50%;border:2px solid #d1d5db;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">
+          <span style="color:#d1d5db;font-size:10px">&#x25CB;</span>
+        </div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600">${escHtml(m.label)}</div>
+          <div style="font-size:11px;color:#6b7280;margin-top:2px">Not yet achieved</div>
+          ${timelineHTML}
+        </div>
+      </div>`;
+
+  if (nearCutoff) {
+    cardHTML += `
+      <div style="border-top:1px solid #fca5a5;padding:8px 12px;background:#fff5f5;display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:11px;color:#dc2626">Getting close to cutoff</span>
+        <button class="ms-ask-doctor-btn" onclick="askDoctorAbout('${escAttr(m.label)}')">+ Ask doctor</button>
+      </div>`;
+  }
+
+  cardHTML += `</div>`;
+  return cardHTML;
 }
 
 function achievementCardHTML(a) {
