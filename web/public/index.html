@@ -1823,7 +1823,7 @@ function renderPendingCardHTML(m, age) {
         </div>
       </div>`;
 
-  if (nearCutoff) {
+  if (nearCutoff || pastCutoff) {
     cardHTML += `
       <div style="border-top:1px solid #fca5a5;padding:8px 12px;background:#fff5f5;display:flex;align-items:center;justify-content:space-between">
         <span style="font-size:11px;color:#dc2626">${pastCutoff ? 'Past recommended window' : 'Getting close to cutoff'}</span>
