@@ -404,6 +404,7 @@ let todaySuggest  = {};
 let slotOverrides = {};
 let knownFoods    = [];
 let chatHistory   = [];
+let pendingAction = null; // { action, payload, followUpStage }
 let roadmapData   = null;
 let milestonesData  = null;
 let achievementsData = [];
@@ -1207,16 +1208,42 @@ async function sendChat() {
 
   // Loading bubble
   const loadId = 'load-' + Date.now();
-  msgs.insertAdjacentHTML('beforeend', `<div class="bubble bubble-agent" id="${loadId}"><span class="loading-dots text-gray-400">Thinking</span></div>`);
+  msgs.insertAdjacentHTML('beforeend',
+    `<div class="bubble bubble-agent" id="${loadId}"><span class="loading-dots text-gray-400">Uma is thinking</span></div>`);
   msgs.scrollTop = msgs.scrollHeight;
 
-  const resp = await fetch('/api/chat', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ agent: 'uma', question: q })
-  }).then(r=>r.json());
+  let resp;
+  try {
+    resp = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: q, pendingAction }),
+    }).then(r => r.json());
+  } catch (e) {
+    document.getElementById(loadId)?.remove();
+    msgs.insertAdjacentHTML('beforeend', `<div class="bubble bubble-agent">Something went wrong. Try again.</div>`);
+    msgs.scrollTop = msgs.scrollHeight;
+    return;
+  }
 
+  // Replace loading bubble with Uma response
   const loadEl = document.getElementById(loadId);
-  if (loadEl) loadEl.outerHTML = `<div class="bubble bubble-agent">${escHtml(resp.response || resp.error || 'Error')}</div>`;
+  if (loadEl) {
+    loadEl.outerHTML = `
+      <div>
+        <div class="bubble-uma-label">🌸 Uma</div>
+        <div class="bubble bubble-agent">${escHtml(resp.response || resp.error || 'Error')}</div>
+        ${resp.action ? renderActionCard(resp.action, resp.payload) : ''}
+      </div>`;
+  }
+
+  // Update pendingAction state
+  if (resp.action === 'log_milestone_followup') {
+    pendingAction = { action: 'log_milestone', payload: resp.payload, followUpStage: 'awaiting_details' };
+  } else {
+    pendingAction = null;
+  }
+
   msgs.scrollTop = msgs.scrollHeight;
 }
 
