@@ -300,47 +300,26 @@
   <!-- ── TAB: MILESTONES ────────────────────────────────────────── -->
   <div id="tab-milestones" class="tab-panel max-w-lg mx-auto px-4 pt-4">
 
+    <!-- Header row -->
     <div class="flex items-center justify-between mb-4">
       <h2 class="text-base font-bold" style="color:var(--peach-d)">Milestones</h2>
       <button onclick="openMilestoneForm()" class="text-xs font-semibold px-3 py-1.5 rounded-full text-white"
         style="background:var(--peach)">+ Log new</button>
     </div>
 
-    <!-- Summary strip -->
-    <div class="card p-4 mb-4 flex gap-4">
-      <div class="text-center flex-1">
-        <div id="ms-achieved-count" class="text-2xl font-bold" style="color:var(--peach)">—</div>
-        <div class="text-xs text-gray-400">Achieved</div>
-      </div>
-      <div class="text-center flex-1">
-        <div id="ms-ahead-count" class="text-2xl font-bold text-amber-500">—</div>
-        <div class="text-xs text-gray-400">Ahead</div>
-      </div>
-      <div class="text-center flex-1">
-        <div id="ms-sig-count" class="text-2xl font-bold text-rose-500">—</div>
-        <div class="text-xs text-gray-400">Significantly ahead</div>
-      </div>
+    <!-- Scope toggle -->
+    <div class="flex gap-2 mb-4">
+      <button id="ms-btn-month" class="ms-scope-btn active" onclick="setMilestoneScope('month')">This Month</button>
+      <button id="ms-btn-all"   class="ms-scope-btn inactive" onclick="setMilestoneScope('all')">All Time</button>
     </div>
 
-    <!-- Achieved list -->
-    <div class="mb-4">
-      <h3 class="text-xs font-bold text-gray-400 mb-2">ACHIEVED</h3>
-      <div id="ms-achieved-list" class="space-y-2"></div>
-    </div>
+    <!-- Summary table (JS-rendered) -->
+    <div id="ms-summary-table"></div>
 
-    <!-- Current month checkable -->
-    <div class="mb-4">
-      <h3 class="text-xs font-bold text-gray-400 mb-2" id="ms-current-heading"></h3>
-      <div id="ms-current-list" class="space-y-2"></div>
-    </div>
+    <!-- Detail panel (JS-rendered) -->
+    <div id="ms-detail-panel" class="mb-4"></div>
 
-    <!-- Upcoming preview -->
-    <div class="mb-4">
-      <h3 class="text-xs font-bold text-gray-400 mb-2" id="ms-upcoming-heading"></h3>
-      <div id="ms-upcoming-list" class="space-y-2"></div>
-    </div>
-
-    <!-- Log form (hidden) -->
+    <!-- Log form (unchanged) -->
     <div id="ms-form" class="hidden card p-4 mb-4 slide-down">
       <h3 class="text-sm font-bold mb-1">What did Saahiti do?</h3>
       <p class="text-xs text-gray-400 mb-3">Describe it in your own words — Meredith will classify it.</p>
