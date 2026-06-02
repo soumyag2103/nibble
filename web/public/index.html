@@ -1753,14 +1753,20 @@ function renderThemeDetailHTML(theme, milestones, achievements, age) {
     });
   }
 
-  // ── Section 3: Ahead (placeholder — implemented in Task 6) ──
+  // ── Section 3: Ahead of schedule ──
   if (aheadAchievements.length > 0) {
     html += `<div class="ms-section-label" style="color:#f97316;border-top:1px solid #f3f4f6">&#x2B50; Ahead of schedule &middot; ${aheadAchievements.length} bonus</div>`;
     aheadAchievements.forEach(a => {
+      const ms = milestones.find(m => m.id === a.id);
+      const monthsEarly = ms ? ms.month - age.months : 0;
       html += `
         <div class="ms-milestone-card ahead" style="padding:9px 12px;display:flex;align-items:center;gap:8px">
           <span style="font-size:15px">&#x2B50;</span>
-          <div style="flex:1"><div style="font-size:13px;font-weight:600">${escHtml(a.name)}</div></div>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:600">${escHtml(a.name)}</div>
+            <div style="font-size:11px;color:#6b7280;margin-top:1px">Typical: ${Number(ms ? ms.month : 0)}m &middot; Logged ${escHtml(a.dateLogged)}</div>
+          </div>
+          <div style="font-size:10px;color:#f97316;font-weight:600">${Number(monthsEarly)}m early</div>
         </div>`;
     });
   }
@@ -1833,6 +1839,12 @@ function renderPendingCardHTML(m, age) {
 
   cardHTML += `</div>`;
   return cardHTML;
+}
+
+function askDoctorAbout(milestoneName) {
+  switchTab('chat', document.querySelector('[data-tab=chat]'));
+  document.getElementById('chat-input').value = 'I want to ask the doctor about ' + milestoneName;
+  document.getElementById('chat-input').focus();
 }
 
 function achievementCardHTML(a) {
