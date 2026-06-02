@@ -14,7 +14,8 @@ const MEREDITH_DIR = path.join(WORKSPACE, 'agents', 'meredith');
 const BAILEY_DIR   = path.join(WORKSPACE, 'agents', 'bailey');
 const LOGS_DIR     = path.join(WORKSPACE, 'logs');
 const PROFILE_PATH = path.join(WORKSPACE, 'agents', 'profile', 'BABY-PROFILE.json');
-const ROADMAP_PATH = path.join(WORKSPACE, 'agents', 'gordon', 'FOOD-ROADMAP.json');
+const ROADMAP_PATH     = path.join(WORKSPACE, 'agents', 'gordon', 'FOOD-ROADMAP.json');
+const WEEK_PLANS_PATH  = path.join(WORKSPACE, 'agents', 'gordon', 'WEEK-PLANS.json');
 
 const DEFAULT_PROFILE = {
   name: 'Baby', dob: new Date().toISOString().split('T')[0], gender: 'other',
@@ -175,6 +176,54 @@ ${rf(path.join(MEREDITH_DIR, 'MILESTONE-LOG.md'))}
 ${rf(path.join(GORDON_DIR, 'FOODS-TRIED.md'))}
 
 Respond in plain readable text. No markdown symbols. Use line breaks. Be concise and direct.`;
+}
+
+function buildUmaClassifierPrompt(profile) {
+  const p = profile || loadProfile();
+  const age = getBabyAge(p);
+  return `You are Uma, a parenting assistant. Classify the parent's message intent.
+Return ONLY valid JSON, nothing else:
+{"intent":"chat","agent":"gordon","confidence":0.9}
+
+Intent values: "chat" | "log_food" | "log_milestone" | "log_doctor_question"
+Agent values: "gordon" | "meredith" | "bailey"
+
+Rules:
+- Food questions, what to feed, reactions, food just eaten/tried → log_food, gordon
+- Developmental milestone just observed (physical/cognitive action) → log_milestone, meredith
+- Health concerns, symptoms, doctor questions, want to ask doctor → log_doctor_question, bailey
+- General parenting chat, emotional support, unclear → chat, gordon
+- confidence below 0.5 → default to gordon
+
+Baby: ${p.name}, ${age.label} old, DOB: ${p.dob}`;
+}
+
+function buildUmaFraming(intent, pendingAction) {
+  const actionInstructions = {
+    log_food: `
+When the parent clearly describes food that was eaten/tried, append this EXACT block at the end (after a blank line):
+ACTION_JSON: {"action":"log_food","payload":{"food":"<food name>","date":"<YYYY-MM-DD>","slot":"<Morning Snack|Lunch|Afternoon Snack|General>"}}`,
+    log_milestone_followup: `
+The parent mentioned a milestone. Ask for timing and notes, then append:
+ACTION_JSON: {"action":"log_milestone_followup","payload":{"milestone":"<milestone description>"}}`,
+    log_milestone: `
+Extract timing and notes from the parent's follow-up. Append:
+ACTION_JSON: {"action":"log_milestone","payload":{"milestone":"<description>","date":"<YYYY-MM-DD>","time":"<e.g. morning, 10am>","notes":"<verbatim parent notes>"}}`,
+    log_doctor_question: `
+After answering, append the question to save:
+ACTION_JSON: {"action":"log_doctor_question","payload":{"question":"<concise question for the doctor>"}}`,
+    chat: '',
+  };
+
+  const activeIntent = pendingAction?.followUpStage === 'awaiting_details' ? 'log_milestone' : (intent || 'chat');
+
+  return `You are speaking as Uma, a warm unified parenting companion. One voice, one persona.
+Natural domain framing (use whichever fits):
+- Food topics: begin with "On the food front, ..."
+- Milestones/development: begin with "Developmentally, ..."
+- Doctor/health: begin with "From a health perspective, ..."
+Tone: loving, direct, transparent, never clinical. Plain text, no markdown symbols. No bullet points.
+${actionInstructions[activeIntent] || ''}`;
 }
 
 // ── Roadmap Generation (Gordon-driven) ───────────────────────────────────────
@@ -649,16 +698,16 @@ const SCHEDULED_PATH = path.join(GORDON_DIR, 'SCHEDULED-MEALS.json');
 
 // POST /api/schedule-meal — save a chosen variation for a future date
 app.post('/api/schedule-meal', (req, res) => {
-  const { date, slot, food, dayNumber, daysRemaining } = req.body;
+  const { date, slot, food, recipe, dayNumber, daysRemaining } = req.body;
   const data = rj(SCHEDULED_PATH) || {};
   if (!data[date]) data[date] = {};
-  data[date][slot] = { food, source: 'scheduled', dayNumber, daysRemaining };
+  data[date][slot] = { food, recipe: recipe || '', source: 'scheduled', dayNumber, daysRemaining };
   wj(SCHEDULED_PATH, data);
   res.json({ success: true });
 });
 
 // GET /api/today-suggestion — pre-populated menu for Today tab
-// Priority: scheduled meal > active 5-day intro > roadmap food for current week > Gordon fallback
+// Priority: scheduled > week plan > active 5-day intro > roadmap > Gordon fallback
 app.get('/api/today-suggestion', async (req, res) => {
   const today      = tod();
   const profile    = loadProfile();
@@ -666,13 +715,29 @@ app.get('/api/today-suggestion', async (req, res) => {
   const sched      = (rj(SCHEDULED_PATH) || {})[today] || {};
   const allSlotIds = profile.slots.map(s => s.id);
 
-  // Slots needing a suggestion (not scheduled and not in active 5-day)
-  const slotsNeedingSuggestion = allSlotIds.filter(s => !sched[s] && !active[s]);
+  // Load cached week plan for today's date
+  const weekPlans   = rj(WEEK_PLANS_PATH) || {};
+  const ageNow      = getBabyAge(profile);
+  const planMonth   = Math.max(6, Math.min(12, ageNow.months));
+  const planWeek    = Math.min(4, Math.floor(ageNow.days / 7) + 1);
+  const weekPlan    = weekPlans[`${planMonth}-${planWeek}`];
+  const todayName   = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+  const todayEntry  = weekPlan?.days?.find(d => d.day.toLowerCase() === todayName.toLowerCase());
+
+  // Week plan checked first for all unscheduled slots — it IS the source of truth
+  const weekPlanFoods = {};
+  const slotsAfterPlan = [];
+  for (const slot of allSlotIds.filter(s => !sched[s])) {
+    const food = todayEntry?.meals?.[slot]?.food;
+    if (food && food !== '...') weekPlanFoods[slot] = food;
+    else slotsAfterPlan.push(slot);
+  }
+
   const roadmapFoods = {};
   const slotsNeedingGordon = [];
 
-  // Try roadmap first for each slot
-  for (const slot of slotsNeedingSuggestion) {
+  // Roadmap fallback for slots not covered by week plan
+  for (const slot of slotsAfterPlan.filter(s => !active[s])) {
     const food = getRoadmapFood(profile, slot);
     if (food) {
       roadmapFoods[slot] = food;
@@ -715,6 +780,15 @@ ${lines}`;
   for (const slot of allSlotIds) {
     if (sched[slot]) {
       suggestion[slot] = sched[slot];
+    } else if (weekPlanFoods[slot]) {
+      // Week plan = source of truth; carry 5-day metadata if applicable so UI still shows day counter
+      const a = active[slot];
+      suggestion[slot] = {
+        food: weekPlanFoods[slot],
+        recipe: todayEntry?.meals?.[slot]?.recipe || '',
+        source: 'weekplan',
+        dayNumber: a?.dayNumber || null, daysRemaining: a?.daysRemaining ?? 0,
+      };
     } else if (active[slot]) {
       suggestion[slot] = { food: active[slot].food, source: '5day', dayNumber: active[slot].dayNumber, daysRemaining: active[slot].daysRemaining };
     } else if (roadmapFoods[slot]) {
@@ -973,12 +1047,10 @@ app.get('/api/progress', (req, res) => {
   });
 });
 
-// POST /api/week-plan — Gordon generates a full 7-day meal plan for a given month+week
-app.post('/api/week-plan', async (req, res) => {
-  const { month, week } = req.body;
-  const profile = loadProfile();
-  const age     = getBabyAge(profile);
-  const pr      = pronouns(profile);
+// ── Week plan generation helper ───────────────────────────────────────────────
+async function generateWeekPlan(month, week, profile) {
+  const age  = getBabyAge(profile);
+  const pr   = pronouns(profile);
 
   const slotLabelMap = { snack1: profile.slots[0]?.label || 'Snack 1', lunch: profile.slots[1]?.label || 'Lunch', snack2: profile.slots[2]?.label || 'Snack 2' };
   const roadmap  = loadRoadmap() || [];
@@ -997,8 +1069,6 @@ app.post('/api/week-plan', async (req, res) => {
     'non-vegetarian': 'non-vegetarian, include eggs/chicken/fish when age-appropriate',
   };
   const dietNote = dietMap[profile.dietary] || profile.dietary;
-
-  const slotsList = profile.slots.map(s => s.id).join(', ');
   const slotsDesc = profile.slots.map(s => `"${s.id}" (${s.label} at ${s.time})`).join(', ');
 
   const dayNames = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
@@ -1034,19 +1104,76 @@ Return ONLY valid JSON — no markdown fences, no explanation:
 ${dayTemplate}
 ]}`;
 
-  try {
-    const result = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 2500, temperature: 0.3,
-    });
-    let raw = result.choices[0].message.content.trim()
-      .replace(/^```json\s*/i,'').replace(/^```\s*/i,'').replace(/```\s*$/,'').trim();
-    const plan = JSON.parse(raw);
-    res.json(plan);
-  } catch(e) {
-    res.status(500).json({ error: e.message });
+  const result = await groq.chat.completions.create({
+    model: 'llama-3.3-70b-versatile',
+    messages: [{ role: 'user', content: prompt }],
+    max_tokens: 2500, temperature: 0.3,
+  });
+  let raw = result.choices[0].message.content.trim()
+    .replace(/^```json\s*/i,'').replace(/^```\s*/i,'').replace(/```\s*$/,'').trim();
+  const plan = JSON.parse(raw);
+
+  // Persist to WEEK-PLANS.json
+  const plans = rj(WEEK_PLANS_PATH) || {};
+  plans[`${month}-${week}`] = plan;
+  wj(WEEK_PLANS_PATH, plans);
+
+  console.log(`[week-plan] Generated and cached month=${month} week=${week}`);
+  return plan;
+}
+
+// Overlay SCHEDULED-MEALS on top of a week plan (mutates a deep-cloned copy)
+function overlayScheduled(plan, month, week, profile) {
+  const scheduled = rj(SCHEDULED_PATH) || {};
+  const dob = new Date(profile.dob + 'T00:00:00');
+  const anchor = new Date(dob);
+  anchor.setMonth(anchor.getMonth() + month);
+  anchor.setDate(anchor.getDate() + (week - 1) * 7);
+  const dow = anchor.getDay();
+  const monday = new Date(anchor);
+  monday.setDate(anchor.getDate() - (dow === 0 ? 6 : dow - 1));
+
+  const result = JSON.parse(JSON.stringify(plan)); // deep clone
+  const localDate = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  result.days.forEach((day, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    const dateStr = localDate(d);
+    const schedDay = scheduled[dateStr];
+    if (!schedDay) return;
+    for (const [slot, meal] of Object.entries(schedDay)) {
+      if (!result.days[i].meals[slot]) result.days[i].meals[slot] = {};
+      result.days[i].meals[slot].food     = meal.food;
+      result.days[i].meals[slot].recipe   = meal.recipe || '';
+      result.days[i].meals[slot].scheduled = true;
+    }
+  });
+  return result;
+}
+
+// POST /api/week-plan — serve cached or generate
+app.post('/api/week-plan', async (req, res) => {
+  const { month, week } = req.body;
+  const profile = loadProfile();
+  let plan = (rj(WEEK_PLANS_PATH) || {})[`${month}-${week}`];
+  if (!plan) {
+    try { plan = await generateWeekPlan(month, week, profile); }
+    catch(e) { return res.status(500).json({ error: e.message }); }
   }
+  res.json(overlayScheduled(plan, month, week, profile));
+});
+
+// GET /api/week-plan/:month/:week — return cached plan or generate on demand
+app.get('/api/week-plan/:month/:week', async (req, res) => {
+  const month = parseInt(req.params.month);
+  const week  = parseInt(req.params.week);
+  const profile = loadProfile();
+  let plan = (rj(WEEK_PLANS_PATH) || {})[`${month}-${week}`];
+  if (!plan) {
+    try { plan = await generateWeekPlan(month, week, profile); }
+    catch(e) { return res.status(500).json({ error: e.message }); }
+  }
+  res.json(overlayScheduled(plan, month, week, profile));
 });
 
 // ── Profile & Settings ────────────────────────────────────────────────────────
@@ -1086,9 +1213,22 @@ app.post('/api/profile', (req, res) => {
     writeFoodsTriedFromOnboarding(profile, tried, actives);
   }
 
-  // Clear roadmap so it regenerates for the new baby's profile
+  // Clear roadmap and week plans so they regenerate for the new baby's profile
   try { fs.unlinkSync(ROADMAP_PATH); } catch {}
+  try { fs.unlinkSync(WEEK_PLANS_PATH); } catch {}
   res.json({ success: true, profile });
+
+  // Async: generate roadmap then current week plan so Plans tab loads instantly
+  setImmediate(async () => {
+    try {
+      if (!fs.existsSync(ROADMAP_PATH)) await generateRoadmap(profile);
+      const age   = getBabyAge(profile);
+      const month = Math.max(6, Math.min(12, age.months));
+      const week  = Math.min(4, Math.floor(age.days / 7) + 1);
+      await generateWeekPlan(month, week, profile);
+      console.log(`[onboarding] Week plan pre-generated for month ${month} week ${week}`);
+    } catch(e) { console.error('[onboarding] async plan generation failed:', e.message); }
+  });
 });
 
 app.put('/api/settings', (req, res) => {
