@@ -1781,7 +1781,7 @@ function renderThemeDetailHTML(theme, milestones, achievements, age) {
           <div style="width:18px;height:18px;border-radius:50%;border:2px dashed #d1d5db;flex-shrink:0"></div>
           <div style="flex:1">
             <div style="font-size:12px;color:#6b7280;font-weight:500">${escHtml(m.label)}</div>
-            <div style="font-size:10px;color:#9ca3af">Expected at: ${m.month}m</div>
+            <div style="font-size:10px;color:#9ca3af">Expected at: ${Number(m.month)}m</div>
           </div>
         </div>`;
     });
