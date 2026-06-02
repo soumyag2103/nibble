@@ -1704,7 +1704,7 @@ function renderThemeDetailHTML(theme, milestones, achievements, age) {
   });
 
   // Section 4: next-month milestones for this theme
-  const upcomingMs = milestones.filter(m => m.month === age.months + 1 && m.category === theme);
+  const upcomingMs = milestones.filter(m => m.month === age.months + 1 && m.category === theme && !achievedIds.has(m.id));
 
   let html = `
     <div class="ms-detail">
