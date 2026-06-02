@@ -66,12 +66,18 @@
     /* Agent pills */
     .agent-pill { padding: 6px 14px; border-radius: 20px; border: 2px solid transparent;
       font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
-    .agent-pill.gordon  { background: #FEF3C7; color: #92400E; }
-    .agent-pill.gordon.active  { border-color: #F59E0B; background: #FDE68A; }
-    .agent-pill.meredith{ background: #EDE9FE; color: #5B21B6; }
-    .agent-pill.meredith.active{ border-color: #8B5CF6; background: #DDD6FE; }
-    .agent-pill.bailey  { background: #DBEAFE; color: #1E3A8A; }
-    .agent-pill.bailey.active  { border-color: #3B82F6; background: #BFDBFE; }
+    .uma-header { display: flex; align-items: center; gap: 10px; padding: 12px 16px 6px; }
+    .uma-avatar { width: 36px; height: 36px; border-radius: 50%; background: #FDE8D8; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+    .uma-header-text h3 { font-size: 14px; font-weight: 700; color: #1a1a1a; margin: 0; }
+    .uma-header-text p  { font-size: 11px; color: #9ca3af; margin: 0; line-height: 1.4; }
+    .bubble-uma-label   { font-size: 10px; color: #9ca3af; margin-bottom: 2px; }
+    .action-card { background: #fff; border: 1.5px solid #e5e7eb; border-radius: 14px; padding: 14px 16px; margin-top: 6px; }
+    .action-card-title  { font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+    .action-card-body   { font-size: 14px; color: #1a1a1a; margin-bottom: 12px; line-height: 1.5; }
+    .action-card-field  { border: none; border-bottom: 1px solid #e5e7eb; outline: none; width: 100%; font-size: 14px; padding: 2px 0; background: transparent; margin-bottom: 4px; }
+    .action-card-btns   { display: flex; gap: 8px; }
+    .btn-confirm { flex: 1; background: var(--peach); color: #fff; border: none; border-radius: 20px; padding: 8px 0; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .btn-edit    { flex: 1; background: #f3f4f6; color: #374151; border: none; border-radius: 20px; padding: 8px 0; font-size: 13px; font-weight: 600; cursor: pointer; }
 
     /* Loading dots */
     .loading-dots::after { content:''; animation: dots 1.2s infinite; }
@@ -156,7 +162,9 @@
     /* Day plan inside expanded week */
     .day-section { padding-bottom:12px; border-bottom:1px solid #f5f0eb; margin-bottom:12px; }
     .day-section:last-child { border:none; margin-bottom:0; padding-bottom:0; }
+    .day-today { background:#FFFDF5; border-radius:12px; padding:10px; margin:-4px -4px 8px; border-left:3px solid var(--peach); }
     .day-label { font-size:11px; font-weight:700; color:#9ca3af; letter-spacing:0.05em; margin-bottom:8px; }
+    .today-pip { background:var(--peach); color:#fff; border-radius:4px; padding:1px 5px; font-size:9px; font-weight:700; letter-spacing:0.06em; vertical-align:middle; margin-right:3px; }
     .meal-plan-card { border-radius:14px; padding:10px 12px; margin-bottom:6px; }
     .meal-plan-card:last-child { margin-bottom:0; }
   </style>
@@ -234,25 +242,18 @@
 
   <!-- ── TAB: CHAT ──────────────────────────────────────────────── -->
   <div id="tab-chat" class="tab-panel max-w-lg mx-auto flex flex-col" style="height: calc(100vh - 112px)">
-
-    <!-- Agent selector -->
-    <div class="bg-white border-b border-orange-100 px-4 py-3 flex gap-2">
-      <button class="agent-pill gordon active" onclick="selectAgent('gordon')">🍳 Gordon</button>
-      <button class="agent-pill meredith" onclick="selectAgent('meredith')">📋 Meredith</button>
-      <button class="agent-pill bailey" onclick="selectAgent('bailey')">🏥 Bailey</button>
+    <div class="uma-header">
+      <div class="uma-avatar">🌸</div>
+      <div class="uma-header-text">
+        <h3>Uma</h3>
+        <p>Here for every question — food, milestones, health, or anything on your mind.</p>
+      </div>
       <button class="ml-auto text-xs text-gray-400 font-medium" onclick="clearChat()">Clear</button>
     </div>
-
-    <!-- Agent description -->
-    <div id="agent-desc" class="px-4 py-2 text-xs text-gray-400 bg-orange-50 border-b border-orange-100"></div>
-
-    <!-- Messages -->
     <div id="chat-messages" class="chat-messages flex-1"></div>
-
-    <!-- Input -->
-    <div class="bg-white border-t border-orange-100 px-4 py-3 flex gap-2">
-      <input id="chat-input" type="text" placeholder="Ask anything…"
-        class="flex-1 bg-gray-50 rounded-full px-4 py-2 text-sm border border-gray-100"
+    <div class="p-3 flex gap-2 items-center border-t border-gray-100">
+      <input id="chat-input" type="text" placeholder="What's on your mind?"
+        class="flex-1 rounded-full border border-gray-200 px-4 py-2 text-sm outline-none focus:border-orange-300"
         onkeydown="if(event.key==='Enter')sendChat()" />
       <button onclick="sendChat()" class="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold"
         style="background:var(--peach)" id="chat-send-btn">→</button>
@@ -402,18 +403,12 @@ let todayLog      = { meals: {} };
 let todaySuggest  = {};
 let slotOverrides = {};
 let knownFoods    = [];
-let currentAgent  = 'gordon';
 let chatHistory   = [];
 let roadmapData   = null;
 let milestonesData  = null;
 let achievementsData = [];
 let tabLoaded = { today: false, chat: false, plans: false, milestones: false, progress: false };
 
-const AGENT_META = {
-  gordon:   { icon:'🍳', name:'Gordon', desc:'Food expert — meal plans, what to feed next, reactions and variants', color:'#F59E0B' },
-  meredith: { icon:'📋', name:'Meredith', desc:'Developmental tracker — milestones, benchmarks, what to expect next', color:'#8B5CF6' },
-  bailey:   { icon:'🏥', name:'Bailey', desc:'Doctor appointment organizer — questions queue, pre-visit briefings', color:'#3B82F6' },
-};
 
 const HEADER_CLASSES = ['cs1-header','lunch-header','cs2-header'];
 const SLOT_EMOJIS    = ['🌤️','☀️','🌸','🌙','🌟'];
@@ -528,14 +523,20 @@ function mealCardHTML(slot, meta, meal, suggest) {
   const displayFood    = alreadyLogged ? meal.food : (overridden ? '' : suggest.food);
   const showBadge      = !alreadyLogged && !overridden && suggest.food;
 
+  // Recipe hint (from week plan)
+  const recipeHint = (!alreadyLogged && !overridden && suggest.recipe)
+    ? `<div class="text-xs text-gray-400 mt-1 leading-relaxed italic">${escHtml(suggest.recipe)}</div>` : '';
+
   // Badge + always-visible Change button
   let badgeHTML = '';
-  const showChange = displayFood; // show Change whenever there's any food shown
+  const showChange = displayFood;
+  const has5dayInfo = suggest.dayNumber && (suggest.source === '5day' || suggest.source === 'weekplan' || suggest.source === 'scheduled');
   if (showBadge) {
-    if (suggest.source === '5day') {
+    if (has5dayInfo) {
+      const totalDays = suggest.dayNumber + (suggest.daysRemaining || 0);
       badgeHTML = `
         <div class="flex items-center mt-1.5 gap-1">
-          <span class="text-xs font-semibold" style="color:var(--peach)">Day ${suggest.dayNumber}/5 — 5-day intro continuing</span>
+          <span class="text-xs font-semibold" style="color:var(--peach)">Day ${suggest.dayNumber}/${totalDays} — 5-day intro continuing</span>
           <button onclick="overrideSlot('${slot}')" class="ml-auto text-xs text-gray-300 hover:text-gray-500 underline">Change</button>
         </div>`;
     } else {
@@ -568,6 +569,7 @@ function mealCardHTML(slot, meta, meal, suggest) {
           class="w-full bg-gray-50 rounded-xl px-3 py-2 text-sm border border-gray-100"
           oninput="onFoodInput('${slot}')" />
         <datalist id="food-list-${slot}">${optionsList}</datalist>
+        ${recipeHint}
         <div id="badge-${slot}">${badgeHTML}</div>
       </div>
       <div class="flex gap-2">${reactionBtns}</div>
@@ -652,7 +654,7 @@ async function loadVariantsAndSchedule(slot) {
   if (!food) return;
 
   const suggest       = todaySuggest[slot] || {};
-  const is5day        = suggest.source === '5day' && suggest.daysRemaining > 0;
+  const is5day        = (suggest.source === '5day' || suggest.source === 'weekplan' || suggest.source === 'scheduled') && suggest.dayNumber && suggest.daysRemaining > 0;
   const daysRemaining = suggest.daysRemaining || 0;
   const currentDayNum = suggest.dayNumber || 1;
 
@@ -660,10 +662,10 @@ async function loadVariantsAndSchedule(slot) {
   container.classList.remove('hidden');
   container.innerHTML = `<div class="text-xs text-gray-400 pb-2">Finding tomorrow's option<span class="loading-dots"></span></div>`;
 
-  // Tomorrow's date
+  // Tomorrow's date (local, not UTC)
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowStr       = tomorrow.toISOString().split('T')[0];
+  const tomorrowStr       = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth()+1).padStart(2,'0')}-${String(tomorrow.getDate()).padStart(2,'0')}`;
   const tomorrowFormatted = tomorrow.toLocaleDateString('en-IN', { weekday:'short', month:'short', day:'numeric' });
 
   // Get multiple variations for tomorrow
@@ -703,7 +705,7 @@ async function loadVariantsAndSchedule(slot) {
       <div class="text-xs font-semibold text-gray-700 mb-0.5">${escHtml(v.name)}</div>
       ${v.description ? `<div class="text-xs text-gray-400 mb-1.5">${escHtml(v.description)}</div>` : ''}
       <button class="use-btn text-xs bg-amber-100 hover:bg-amber-200 text-amber-800 font-semibold px-3 py-1 rounded-full transition-all"
-        onclick="scheduleVariation(this,'${escAttr(slot)}','${escAttr(tomorrowStr)}','${escAttr(v.name)}',${actualDay},${daysLeft},'${escAttr(tomorrowFormatted)}','${escAttr(food)}')">
+        onclick="scheduleVariation(this,'${escAttr(slot)}','${escAttr(tomorrowStr)}','${escAttr(v.name)}',${actualDay},${daysLeft},'${escAttr(tomorrowFormatted)}','${escAttr(food)}','${escAttr(v.description||'')}')">
         Use for ${tomorrowFormatted} →
       </button>
     </div>`).join('');
@@ -712,14 +714,14 @@ async function loadVariantsAndSchedule(slot) {
   container.innerHTML = html;
 }
 
-async function scheduleVariation(btn, slot, date, food, dayNumber, daysRemaining, dateFormatted, heroFood) {
+async function scheduleVariation(btn, slot, date, food, dayNumber, daysRemaining, dateFormatted, heroFood, recipe) {
   btn.disabled = true;
   btn.textContent = 'Saving…';
   try {
     const r = await fetch('/api/schedule-meal', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date, slot, food, dayNumber, daysRemaining }),
+      body: JSON.stringify({ date, slot, food, recipe: recipe || '', dayNumber, daysRemaining }),
     });
     if (!r.ok) throw new Error('Failed');
     // Confirm on this card
@@ -1178,27 +1180,17 @@ function removeSlotRow(btn) {
 
 // ── CHAT TAB ─────────────────────────────────────────────────────────────────
 function initChat() {
-  selectAgent('gordon');
-}
-
-function selectAgent(agent) {
-  currentAgent = agent;
-  document.querySelectorAll('.agent-pill').forEach(p => p.classList.remove('active'));
-  document.querySelector(`.agent-pill.${agent}`).classList.add('active');
-
-  const meta = AGENT_META[agent];
-  document.getElementById('agent-desc').textContent = `${meta.icon} ${meta.name} — ${meta.desc}`;
-
   if (chatHistory.length === 0) {
-    document.getElementById('chat-messages').innerHTML = `
-      <div class="text-center text-xs text-gray-300 py-4">${meta.icon} ${meta.name} is ready. Ask anything about Saahiti.</div>`;
+    document.getElementById('chat-messages').innerHTML =
+      `<div class="text-center text-xs text-gray-300 py-4">🌸 Uma is here. Ask anything about ${appProfile?.name || 'your baby'}.</div>`;
   }
 }
 
 function clearChat() {
   chatHistory = [];
-  document.getElementById('chat-messages').innerHTML = `
-    <div class="text-center text-xs text-gray-300 py-4">${AGENT_META[currentAgent].icon} ${AGENT_META[currentAgent].name} is ready. Ask anything about Saahiti.</div>`;
+  pendingAction = null;
+  document.getElementById('chat-messages').innerHTML =
+    `<div class="text-center text-xs text-gray-300 py-4">🌸 Uma is here. Ask anything about ${appProfile?.name || 'your baby'}.</div>`;
 }
 
 async function sendChat() {
@@ -1220,7 +1212,7 @@ async function sendChat() {
 
   const resp = await fetch('/api/chat', {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ agent: currentAgent, question: q })
+    body: JSON.stringify({ agent: 'uma', question: q })
   }).then(r=>r.json());
 
   const loadEl = document.getElementById(loadId);
@@ -1230,7 +1222,51 @@ async function sendChat() {
 
 // ── PLANS TAB ────────────────────────────────────────────────────────────────
 let plansSelectedMonth = null;
-let weekPlanCache = {}; // "month-week" → plan data
+let weekPlanCache = {}; // "month-week" → plan data (in-memory mirror of server cache)
+
+function ordSuffix(d) {
+  if (d >= 11 && d <= 13) return 'th';
+  return ['th','st','nd','rd','th','th','th','th','th','th'][d % 10];
+}
+
+function formatDayDate(date) {
+  const dayName = date.toLocaleDateString('en-GB', { weekday: 'long' });
+  const d = date.getDate();
+  const mon = date.toLocaleDateString('en-GB', { month: 'long' });
+  const yr  = date.getFullYear();
+  return `${dayName}, ${d}${ordSuffix(d)} ${mon} ${yr}`;
+}
+
+function weekStartDate(month, week) {
+  // month = baby age in months; anchor = dob + month months + (week-1)*7 days, snapped to Monday
+  const dob = new Date((appProfile?.dob || '2000-01-01') + 'T00:00:00');
+  const anchor = new Date(dob);
+  anchor.setMonth(anchor.getMonth() + month);
+  anchor.setDate(anchor.getDate() + (week - 1) * 7);
+  const dow = anchor.getDay(); // 0=Sun
+  const monday = new Date(anchor);
+  monday.setDate(anchor.getDate() - (dow === 0 ? 6 : dow - 1));
+  return monday;
+}
+
+async function autoExpandCurrentWeek() {
+  if (!roadmapData) return;
+  const { age } = roadmapData;
+  const curWeek = Math.min(4, Math.floor(age.days / 7) + 1);
+  const card    = document.getElementById(`week-card-${curWeek}`);
+  if (!card) return;
+  const detail  = document.getElementById(`week-detail-${age.months}-${curWeek}`);
+  if (detail?.classList.contains('hidden')) {
+    await toggleWeek(age.months, curWeek);
+  }
+  // Scroll to week card first, then after render find today's day element
+  setTimeout(() => {
+    const todayName = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+    const todayEl   = document.getElementById(`day-${todayName}`);
+    if (todayEl) todayEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    else card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 300);
+}
 const CHIP_COLORS = [
   'background:#FEF3C7;color:#92400E', 'background:#DCFCE7;color:#166534',
   'background:#FCE7F3;color:#9D174D', 'background:#DBEAFE;color:#1E3A8A',
@@ -1238,11 +1274,12 @@ const CHIP_COLORS = [
 ];
 
 async function loadPlans() {
-  tabLoaded.plans = true;
   roadmapData = await fetch('/api/food-roadmap').then(r=>r.json());
   plansSelectedMonth = roadmapData.age.months;
   renderPlanMonths();
   renderPlanWeeks(plansSelectedMonth);
+  // Auto-expand current week and scroll to it
+  autoExpandCurrentWeek();
 }
 
 function renderPlanMonths() {
@@ -1303,7 +1340,7 @@ function renderPlanWeeks(month) {
           <span class="week-chevron${isOpen ? ' open' : ''}" id="chevron-${month}-${wk}">▼</span>
         </div>
         <div id="week-detail-${month}-${wk}" class="${isOpen ? '' : 'hidden'} border-t border-orange-50 px-4 pt-4 pb-2">
-          ${isOpen ? renderWeekPlan(weekPlanCache[cacheKey]) : ''}
+          ${isOpen ? renderWeekPlan(weekPlanCache[cacheKey], month, wk) : ''}
         </div>
       </div>`);
   }
@@ -1325,30 +1362,28 @@ async function toggleWeek(month, week) {
 
   const cacheKey = `${month}-${week}`;
   if (weekPlanCache[cacheKey]) {
-    detail.innerHTML = renderWeekPlan(weekPlanCache[cacheKey]);
+    detail.innerHTML = renderWeekPlan(weekPlanCache[cacheKey], month, week);
     return;
   }
 
-  // Load from Gordon
+  // Fetch from server (returns cached or generates on demand)
   detail.innerHTML = `<div class="text-xs text-gray-400 py-4 text-center">Gordon is planning this week<span class="loading-dots"></span></div>`;
   try {
-    const plan = await fetch('/api/week-plan', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ month, week }),
-    }).then(r => r.json());
-
+    const plan = await fetch(`/api/week-plan/${month}/${week}`).then(r => r.json());
     weekPlanCache[cacheKey] = plan;
-    detail.innerHTML = renderWeekPlan(plan);
+    detail.innerHTML = renderWeekPlan(plan, month, week);
   } catch(e) {
     detail.innerHTML = `<div class="text-xs text-red-400 py-4 text-center">Could not generate plan. <button onclick="toggleWeek(${month},${week});toggleWeek(${month},${week})" class="underline">Retry</button></div>`;
   }
 }
 
-function renderWeekPlan(plan) {
+function renderWeekPlan(plan, month, week) {
   if (!plan?.days?.length) return '<div class="text-xs text-gray-400 py-2">No plan available.</div>';
 
-  return plan.days.map(day => {
+  const monday = (month != null && week != null) ? weekStartDate(month, week) : null;
+  const todayStr = new Date().toDateString();
+
+  return plan.days.map((day, i) => {
     const meals = Object.entries(day.meals || {}).map(([slotId, meal]) => {
       const meta = SLOT_META[slotId] || { label: slotId, headerClass:'cs1-header', emoji:'🍽' };
       const bgMap = { 'cs1-header':'#FFFBEB', 'lunch-header':'#F0FDF4', 'cs2-header':'#FDF2F8' };
@@ -1363,9 +1398,20 @@ function renderWeekPlan(plan) {
         </div>`;
     }).join('');
 
+    let dateLabel = '';
+    let isToday = false;
+    if (monday) {
+      const dayDate = new Date(monday);
+      dayDate.setDate(monday.getDate() + i);
+      dateLabel = formatDayDate(dayDate);
+      isToday = dayDate.toDateString() === todayStr;
+    }
+
     return `
-      <div class="day-section">
-        <div class="day-label">${escHtml(day.day).toUpperCase()}</div>
+      <div class="day-section${isToday ? ' day-today' : ''}" id="day-${day.day.toLowerCase()}">
+        <div class="day-label">
+          ${isToday ? '<span class="today-pip">TODAY</span> ' : ''}${escHtml(dateLabel || day.day.toUpperCase())}
+        </div>
         ${meals}
       </div>`;
   }).join('');
