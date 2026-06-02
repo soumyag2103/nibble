@@ -189,11 +189,11 @@ Intent values: "chat" | "log_food" | "log_milestone" | "log_doctor_question"
 Agent values: "gordon" | "meredith" | "bailey"
 
 Rules:
-- Food questions, what to feed, reactions, food just eaten/tried → log_food, gordon
-- Developmental milestone just observed (physical/cognitive action) → log_milestone, meredith
-- Health concerns, symptoms, doctor questions, want to ask doctor → log_doctor_question, bailey
-- General parenting chat, emotional support, unclear → chat, gordon
-- confidence below 0.5 → default to gordon
+- Food questions, what to feed, reactions, food just eaten/tried → {"intent":"log_food","agent":"gordon"}
+- Developmental milestone just observed (physical/cognitive action) → {"intent":"log_milestone","agent":"meredith"}
+- Health concerns, symptoms, doctor questions, want to ask doctor → {"intent":"log_doctor_question","agent":"bailey"}
+- General parenting chat, emotional support, anything unclear → {"intent":"chat","agent":"gordon"}
+- If confidence below 0.5, use {"intent":"chat","agent":"gordon"}
 
 Baby: ${p.name}, ${age.label} old, DOB: ${p.dob}`;
 }
@@ -215,7 +215,9 @@ ACTION_JSON: {"action":"log_doctor_question","payload":{"question":"<concise que
     chat: '',
   };
 
-  const activeIntent = pendingAction?.followUpStage === 'awaiting_details' ? 'log_milestone' : (intent || 'chat');
+  const activeIntent = pendingAction?.followUpStage === 'awaiting_details'
+    ? 'log_milestone'
+    : (intent === 'log_milestone' ? 'log_milestone_followup' : (intent || 'chat'));
 
   return `You are speaking as Uma, a warm unified parenting companion. One voice, one persona.
 Natural domain framing (use whichever fits):
