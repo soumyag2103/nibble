@@ -536,25 +536,73 @@ app.post('/api/ask-gordon', async (req, res) => {
   }
 });
 
-// Multi-agent chat
+// Multi-agent chat (Uma unified routing)
 app.post('/api/chat', async (req, res) => {
-  const { agent, question } = req.body;
-  const prompts = {
+  const { question, pendingAction } = req.body;
+  const profile = loadProfile();
+
+  // ── Call 1: Classify intent (skip if in milestone follow-up) ──
+  let agent = 'gordon';
+  let intent = 'chat';
+
+  if (pendingAction?.followUpStage === 'awaiting_details') {
+    agent   = 'meredith';
+    intent  = 'log_milestone';
+  } else {
+    try {
+      const classify = await groq.chat.completions.create({
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'system', content: buildUmaClassifierPrompt(profile) },
+          { role: 'user',   content: question },
+        ],
+        max_tokens: 80,
+      });
+      const parsed = JSON.parse(classify.choices[0].message.content.trim());
+      agent  = parsed.agent      || 'gordon';
+      intent = parsed.intent     || 'chat';
+      const confidence = parsed.confidence ?? 1;
+      if (confidence < 0.5) { agent = 'gordon'; intent = 'chat'; }
+    } catch {
+      agent = 'gordon'; intent = 'chat';
+    }
+  }
+
+  // ── Call 2: Agent response with Uma framing ──
+  const promptBuilders = {
     gordon:   buildGordonPrompt,
     meredith: buildMeredithPrompt,
     bailey:   buildBaileyPrompt,
   };
-  const buildPrompt = prompts[agent] || buildGordonPrompt;
+  const systemPrompt = (promptBuilders[agent] || buildGordonPrompt)(profile)
+    + '\n\n' + buildUmaFraming(intent, pendingAction);
+
+  const userMessage = pendingAction?.followUpStage === 'awaiting_details'
+    ? `The parent earlier mentioned this milestone: "${pendingAction.payload?.milestone}". They now provide timing/notes: "${question}". Extract details and append ACTION_JSON.`
+    : question;
+
   try {
     const result = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
       messages: [
-        { role: 'system', content: buildPrompt() },
-        { role: 'user',   content: question }
+        { role: 'system', content: systemPrompt },
+        { role: 'user',   content: userMessage },
       ],
       max_tokens: 1024,
     });
-    res.json({ response: result.choices[0].message.content });
+
+    let content = result.choices[0].message.content;
+
+    // Parse and strip ACTION_JSON block
+    let action = null, payload = null;
+    const actionIdx = content.indexOf('ACTION_JSON:');
+    if (actionIdx !== -1) {
+      const jsonStr = content.slice(actionIdx + 'ACTION_JSON:'.length).trim();
+      try { ({ action, payload } = JSON.parse(jsonStr)); } catch { /* ignore parse error */ }
+      content = content.slice(0, actionIdx).trim();
+    }
+
+    res.json({ response: content, action, payload });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
