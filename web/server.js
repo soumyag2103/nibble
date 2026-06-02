@@ -48,7 +48,7 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const rf  = p => { try { return fs.readFileSync(p, 'utf-8'); } catch { return ''; } };
 const wf  = (p, c) => { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, c, 'utf-8'); };
@@ -67,23 +67,23 @@ function getBabyAge(profile) {
 // Convenience for routes that don't pass profile (reads fresh each call)
 function getSaahitiAge() { return getBabyAge(loadProfile()); }
 
-// Convert a day's JSON log → markdown for agent context
+// Convert a day's JSON log â†’ markdown for agent context
 function jsonToMd(log, profile) {
   if (!log) return '';
   const p = profile || loadProfile();
-  let md = `# Daily Log — ${log.date}\n\n`;
+  let md = `# Daily Log â€” ${log.date}\n\n`;
   for (const slot of p.slots) {
     const m = log.meals?.[slot.id];
     if (!m?.food) continue;
     md += `## ${slot.label}\n`;
     md += `- Food: ${m.food}\n`;
-    md += `- Reaction: ${m.reaction || '—'}\n`;
-    md += `- Notes: ${m.notes || '—'}\n\n`;
+    md += `- Reaction: ${m.reaction || 'â€”'}\n`;
+    md += `- Notes: ${m.notes || 'â€”'}\n\n`;
   }
   return md;
 }
 
-// ── Agent Prompt Builders ─────────────────────────────────────────────────────
+// â”€â”€ Agent Prompt Builders â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function buildGordonPrompt(profile) {
   const p = profile || loadProfile();
@@ -189,10 +189,10 @@ Intent values: "chat" | "log_food" | "log_milestone" | "log_doctor_question"
 Agent values: "gordon" | "meredith" | "bailey"
 
 Rules:
-- Food questions, what to feed, reactions, food just eaten/tried → {"intent":"log_food","agent":"gordon"}
-- Developmental milestone just observed (physical/cognitive action) → {"intent":"log_milestone","agent":"meredith"}
-- Health concerns, symptoms, doctor questions, want to ask doctor → {"intent":"log_doctor_question","agent":"bailey"}
-- General parenting chat, emotional support, anything unclear → {"intent":"chat","agent":"gordon"}
+- Food questions, what to feed, reactions, food just eaten/tried â†’ {"intent":"log_food","agent":"gordon"}
+- Developmental milestone just observed (physical/cognitive action) â†’ {"intent":"log_milestone","agent":"meredith"}
+- Health concerns, symptoms, doctor questions, want to ask doctor â†’ {"intent":"log_doctor_question","agent":"bailey"}
+- General parenting chat, emotional support, anything unclear â†’ {"intent":"chat","agent":"gordon"}
 - If confidence below 0.5, use {"intent":"chat","agent":"gordon"}
 
 Baby: ${p.name}, ${age.label} old, DOB: ${p.dob}`;
@@ -228,17 +228,17 @@ Tone: loving, direct, transparent, never clinical. Plain text, no markdown symbo
 ${actionInstructions[activeIntent] || ''}`;
 }
 
-// ── Roadmap Generation (Gordon-driven) ───────────────────────────────────────
+// â”€â”€ Roadmap Generation (Gordon-driven) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function generateRoadmap(profile) {
   const p   = profile || loadProfile();
   const pr  = pronouns(p);
   const age = getBabyAge(p);
   const dietMap = {
-    'vegetarian':     'strict vegetarian — no eggs, meat, or fish',
-    'eggetarian':     'eggetarian — eggs are fine, no meat or fish',
-    'pescatarian':    'pescatarian — fish and eggs are fine, no meat',
-    'non-vegetarian': 'non-vegetarian — include eggs, chicken, fish at appropriate ages',
+    'vegetarian':     'strict vegetarian â€” no eggs, meat, or fish',
+    'eggetarian':     'eggetarian â€” eggs are fine, no meat or fish',
+    'pescatarian':    'pescatarian â€” fish and eggs are fine, no meat',
+    'non-vegetarian': 'non-vegetarian â€” include eggs, chicken, fish at appropriate ages',
   };
   const dietNote = dietMap[p.dietary] || p.dietary;
   const foodsTried = rf(path.join(GORDON_DIR, 'FOODS-TRIED.md')) || 'None yet.';
@@ -263,15 +263,15 @@ Generate a structured roadmap for months 6 through 12, covering 4 weeks per mont
 
 RULES:
 - Introduce ONE new food per week maximum per slot. Different new food each slot.
-- Foods tried already can still appear as rotations — label them clearly in the tip.
+- Foods tried already can still appear as rotations â€” label them clearly in the tip.
 - No salt, sugar, honey, whole nuts. Ghee and mild Indian spices (cumin, turmeric, ajwain, coriander) are fine.
 - Age-appropriate textures: smooth puree at 6m, mashed at 7-8m, soft lumps at 9-10m, finger food at 11-12m.
 - Indian home kitchen style throughout.
 - Diet: ${dietNote}. Respect this strictly for every entry.
-- Not every slot needs a new food every week — use null food for rotation weeks.
+- Not every slot needs a new food every week â€” use null food for rotation weeks.
 - Each tip: max 2 sentences. Practical prep instructions.
 
-Return ONLY valid JSON — no markdown fences, no explanation:
+Return ONLY valid JSON â€” no markdown fences, no explanation:
 {"roadmap":[
 ${template}
 ]}`;
@@ -296,7 +296,7 @@ function loadRoadmap() {
   return null; // not yet generated
 }
 
-// Map profile slot ID → semantic name (snack1/lunch/snack2) by position
+// Map profile slot ID â†’ semantic name (snack1/lunch/snack2) by position
 function slotToSemantic(profile) {
   const map = {};
   profile.slots.forEach((s, i) => {
@@ -306,7 +306,7 @@ function slotToSemantic(profile) {
 }
 
 // Get current roadmap food for a given profile slot ID
-// Fallback chain: exact week → any week same month → previous month any week
+// Fallback chain: exact week â†’ any week same month â†’ previous month any week
 function getRoadmapFood(profile, slotId) {
   const roadmap = loadRoadmap();
   if (!roadmap) return null;
@@ -321,7 +321,7 @@ function getRoadmapFood(profile, slotId) {
   let entry = roadmap.find(r => r.month === month && r.week === week && r.slot === sem);
   if (entry?.food) return entry.food;
 
-  // 2. Any week in same month, same slot (pick highest week ≤ current week, else lowest)
+  // 2. Any week in same month, same slot (pick highest week â‰¤ current week, else lowest)
   const sameMonth = roadmap.filter(r => r.month === month && r.slot === sem).sort((a,b) => b.week - a.week);
   entry = sameMonth.find(r => r.week <= week) || sameMonth[sameMonth.length - 1];
   if (entry?.food) return entry.food;
@@ -335,7 +335,7 @@ function getRoadmapFood(profile, slotId) {
   return null;
 }
 
-// ── Static Data ───────────────────────────────────────────────────────────────
+// â”€â”€ Static Data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // slot field uses semantic names: 'snack1' (first slot), 'lunch' (main meal), 'snack2' (third slot)
 // dietary field (optional): array of dietary keys that include this food; absent = all diets
@@ -345,16 +345,16 @@ const FOOD_ROADMAP = [
   { month:6, week:1, slot:'snack2', food:'Sweet Potato', tip:'Steam 12 min, blend smooth. Add 1 tsp ghee for healthy fats.' },
   { month:6, week:2, slot:'snack1', food:'Apple', tip:'Steam 10 min, blend smooth. Tiny pinch of cardamom aids digestion.' },
   { month:6, week:2, slot:'snack2', food:'Carrot', tip:'Steam 15 min, blend silky. Mix with potato for creamier texture.' },
-  { month:6, week:3, slot:'snack1', food:'Avocado', tip:'Mash ripe avocado with fork — no cooking. Serve immediately, browns quickly.' },
+  { month:6, week:3, slot:'snack1', food:'Avocado', tip:'Mash ripe avocado with fork â€” no cooking. Serve immediately, browns quickly.' },
   { month:6, week:3, slot:'snack2', food:'Pumpkin', tip:'Steam 10 min, blend smooth. Naturally sweet, rich in Vitamin A.' },
   { month:6, week:4, slot:'snack1', food:'Papaya', tip:'Use fully ripe papaya only. Natural enzymes prevent constipation.' },
-  { month:6, week:4, slot:'snack2', food:'Green Peas', tip:'Boil, blend, strain through fine mesh. Straining removes skins — essential.' },
+  { month:6, week:4, slot:'snack2', food:'Green Peas', tip:'Boil, blend, strain through fine mesh. Straining removes skins â€” essential.' },
   // Month 7
   { month:7, week:1, slot:'lunch', food:'Rice Dal Khichdi', tip:'2 tbsp rice + 1 tbsp moong dal, pressure cook 4 whistles with turmeric, add ghee.' },
   { month:7, week:1, slot:'snack2', food:'Zucchini', tip:'Steam 7 min, blend smooth. Mild flavour, high water content.' },
   { month:7, week:2, slot:'snack1', food:'Ragi', tip:'Mix ragi flour into boiling water, cook 7 min stirring. Exceptional calcium source.' },
   { month:7, week:2, slot:'snack2', food:'Spinach', tip:'Blanch 2 min, blend with boiled potato. Potato balances the strong flavour.' },
-  { month:7, week:3, slot:'snack1', food:'Mango', tip:'Fully ripe Alphonso or Kesar only. Blend smooth — no fibrous strings.' },
+  { month:7, week:3, slot:'snack1', food:'Mango', tip:'Fully ripe Alphonso or Kesar only. Blend smooth â€” no fibrous strings.' },
   { month:7, week:4, slot:'snack1', food:'Oats', tip:'Cook rolled oats 5 min stirring. Blend smooth, thin with breast milk.' },
   { month:7, week:4, slot:'snack2', food:'Broccoli', tip:'Steam 8 min, blend smooth. Mix with potato to soften strong flavour.' },
   // Month 8
@@ -362,15 +362,15 @@ const FOOD_ROADMAP = [
   { month:8, week:1, slot:'lunch', food:'Egg Yolk Dal', tip:'Hard boil, mash yolk into moong dal. Excellent iron + choline for brain.', dietary:['eggetarian','non-vegetarian'] },
   { month:8, week:2, slot:'snack1', food:'Suji (Semolina)', tip:'Roast in ghee 3 min, cook with water 4 min stirring. No sugar needed.' },
   { month:8, week:2, slot:'lunch', food:'Chicken Broth Khichdi', tip:'Pressure cook mild chicken broth with rice and moong dal. Strain before serving.', dietary:['non-vegetarian'] },
-  { month:8, week:3, slot:'snack1', food:'Chikoo (Sapodilla)', tip:'Fully ripe chikoo only — unripe is astringent. Mash smooth.' },
+  { month:8, week:3, slot:'snack1', food:'Chikoo (Sapodilla)', tip:'Fully ripe chikoo only â€” unripe is astringent. Mash smooth.' },
   { month:8, week:4, slot:'snack1', food:'Cauliflower', tip:'Steam 10 min, blend smooth. Mix with potato for creamier texture.' },
   { month:8, week:4, slot:'snack2', food:'Daliya (Broken Wheat)', tip:'Roast 2 min, pressure cook 4 whistles with moong dal. Add ghee.' },
   // Month 9
   { month:9, week:1, slot:'snack1', food:'Paneer', tip:'Fresh unsalted paneer only. Mash or blend with a little warm water.' },
   { month:9, week:1, slot:'snack2', food:'Beetroot', tip:'Boil 20 min, blend smooth. Pink nappies are normal and harmless.' },
-  { month:9, week:1, slot:'lunch', food:'Fish Puree', tip:'Steam white fish (rohu/pomfret) 8 min, blend smooth. No bones — check twice.', dietary:['pescatarian','non-vegetarian'] },
+  { month:9, week:1, slot:'lunch', food:'Fish Puree', tip:'Steam white fish (rohu/pomfret) 8 min, blend smooth. No bones â€” check twice.', dietary:['pescatarian','non-vegetarian'] },
   { month:9, week:2, slot:'snack1', food:'Kiwi', tip:'Fully ripe kiwi. Mix with banana to neutralise acidity.' },
-  { month:9, week:2, slot:'snack2', food:'Mixed Lentils Dal', tip:'Panchmel dal — 5 lentils pressure cooked. Complete amino acid profile.' },
+  { month:9, week:2, slot:'snack2', food:'Mixed Lentils Dal', tip:'Panchmel dal â€” 5 lentils pressure cooked. Complete amino acid profile.' },
   { month:9, week:3, slot:'snack1', food:'Poha', tip:'Rinse thin poha, cook 4 min stirring. Iron-rich and easily digestible.' },
   { month:9, week:3, slot:'snack2', food:'Tomato', tip:'Always cook tomatoes to reduce acidity. Mix with potato to mellow.' },
   { month:9, week:4, slot:'snack1', food:'Yogurt (Plain)', tip:'Full-fat plain dahi only. Mix with mango or banana. Serve at room temp.' },
@@ -379,7 +379,7 @@ const FOOD_ROADMAP = [
   { month:10, week:1, slot:'snack1', food:'Idli', tip:'Steam mini idlis, break into pieces, serve with soft moong dal.' },
   { month:10, week:1, slot:'snack2', food:'Cheese', tip:'Low-salt full-fat soft mozzarella only. Cut into 1cm cubes for finger food.' },
   { month:10, week:2, slot:'snack1', food:'Strawberry', tip:'Blend smooth. Mix with banana to reduce acidity. No added sugar.' },
-  { month:10, week:2, slot:'snack2', food:'Corn', tip:'Blend and strain through fine mesh — corn skins are a choking hazard.' },
+  { month:10, week:2, slot:'snack2', food:'Corn', tip:'Blend and strain through fine mesh â€” corn skins are a choking hazard.' },
   { month:10, week:2, slot:'lunch', food:'Scrambled Egg', tip:'Scramble with ghee on low heat until just set. Small soft pieces only.', dietary:['eggetarian','non-vegetarian'] },
   { month:10, week:3, slot:'snack1', food:'Bajra (Pearl Millet)', tip:'Cook bajra flour with water 7 min stirring. Add ghee. Warming and iron-rich.' },
   { month:10, week:3, slot:'lunch', food:'Chicken Keema (Mild)', tip:'Mince finely, cook with turmeric + ghee, no salt. Mash with dal before serving.', dietary:['non-vegetarian'] },
@@ -387,15 +387,15 @@ const FOOD_ROADMAP = [
   { month:10, week:4, slot:'snack2', food:'Lauki (Bottle Gourd)', tip:'Pressure cook with rice + moong dal 4 whistles. Most cooling vegetable.' },
   // Month 11
   { month:11, week:1, slot:'snack1', food:'Soft Roti / Chapati', tip:'Soft enough to squash between fingers. Tear into 2cm pieces with ghee.' },
-  { month:11, week:2, slot:'snack2', food:'Rajma (Kidney Beans)', tip:'Soak overnight, pressure cook 8 whistles. Mash with ghee — complete protein.' },
-  { month:11, week:3, slot:'lunch', food:'Fish Finger Food', tip:'Steam soft white fish chunk — must flake easily. Remove all bones carefully.', dietary:['pescatarian','non-vegetarian'] },
+  { month:11, week:2, slot:'snack2', food:'Rajma (Kidney Beans)', tip:'Soak overnight, pressure cook 8 whistles. Mash with ghee â€” complete protein.' },
+  { month:11, week:3, slot:'lunch', food:'Fish Finger Food', tip:'Steam soft white fish chunk â€” must flake easily. Remove all bones carefully.', dietary:['pescatarian','non-vegetarian'] },
   // Month 12
   { month:12, week:1, slot:'snack1', food:'Family Food Adaptation', tip:'Set aside family dal/sabzi before adding salt and whole spices.' },
-  { month:12, week:2, slot:'snack1', food:'Grapes (Quartered)', tip:'Quarter each grape lengthwise — never offer whole. Serious choking hazard.' },
+  { month:12, week:2, slot:'snack1', food:'Grapes (Quartered)', tip:'Quarter each grape lengthwise â€” never offer whole. Serious choking hazard.' },
 ];
 
 const MILESTONES_DATA = [
-  // Month 5 (already passed — for context)
+  // Month 5 (already passed â€” for context)
   { id:'m5_1', month:5, label:'Rolls confidently, uses rolling to move', category:'Motor' },
   { id:'m5_2', month:5, label:'Sits with minimal support (tripod sit)', category:'Motor' },
   { id:'m5_3', month:5, label:'Transfers objects hand to hand', category:'Motor' },
@@ -403,7 +403,7 @@ const MILESTONES_DATA = [
   { id:'m5_5', month:5, label:'Blows raspberries', category:'Language' },
   { id:'m5_6', month:5, label:'Shows interest in solid foods, reaches for food', category:'Feeding' },
   // Month 6
-  { id:'m6_1', month:6, label:'Sits without support briefly (10–30 sec)', category:'Motor' },
+  { id:'m6_1', month:6, label:'Sits without support briefly (10â€“30 sec)', category:'Motor' },
   { id:'m6_2', month:6, label:'Stands with support when held', category:'Motor' },
   { id:'m6_3', month:6, label:'Rolls confidently as main locomotion', category:'Motor' },
   { id:'m6_4', month:6, label:'Stranger anxiety begins', category:'Social' },
@@ -443,7 +443,7 @@ const MILESTONES_DATA = [
   { id:'m9_8', month:9, label:'Eating a wide variety of family foods', category:'Feeding' },
 ];
 
-// ── API Routes ────────────────────────────────────────────────────────────────
+// â”€â”€ API Routes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // Status: date + age
 app.get('/api/status', (req, res) => {
@@ -541,7 +541,7 @@ app.post('/api/chat', async (req, res) => {
   const { question, pendingAction } = req.body;
   const profile = loadProfile();
 
-  // ── Call 1: Classify intent (skip if in milestone follow-up) ──
+  // â”€â”€ Call 1: Classify intent (skip if in milestone follow-up) â”€â”€
   let agent = 'gordon';
   let intent = 'chat';
 
@@ -568,7 +568,7 @@ app.post('/api/chat', async (req, res) => {
     }
   }
 
-  // ── Call 2: Agent response with Uma framing ──
+  // â”€â”€ Call 2: Agent response with Uma framing â”€â”€
   const promptBuilders = {
     gordon:   buildGordonPrompt,
     meredith: buildMeredithPrompt,
@@ -606,6 +606,41 @@ app.post('/api/chat', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// Task 3: Log a food introduction via Uma chat
+app.post('/api/log-food', (req, res) => {
+  const { food, date, slot } = req.body;
+  if (!food || !date) return res.status(400).json({ error: 'food and date required' });
+
+  const foodsPath = path.join(GORDON_DIR, 'FOODS-TRIED.md');
+  let content = rf(foodsPath);
+
+  const profile = loadProfile();
+  const matched = profile.slots.find(s =>
+    s.label.toLowerCase() === (slot || '').toLowerCase() ||
+    s.id.toLowerCase()    === (slot || '').toLowerCase()
+  );
+  const section = matched?.label || 'General';
+  const newRow  = `| ${food} | ${date} | Pending | Logged via Uma |`;
+
+  const sectionHeader = `## ${section}`;
+  if (content.includes(sectionHeader)) {
+    const lines = content.split('\n');
+    const secIdx = lines.findIndex(l => l.trim() === sectionHeader);
+    let insertIdx = lines.length;
+    for (let i = secIdx + 1; i < lines.length; i++) {
+      if (lines[i].startsWith('## ')) { insertIdx = i; break; }
+    }
+    lines.splice(insertIdx, 0, newRow);
+    content = lines.join('\n');
+  } else {
+    content += `\n\n${sectionHeader}\n| Food | First Introduced | Reaction | Notes |\n|------|-----------------|----------|-------|\n${newRow}`;
+  }
+
+  content = content.replace(/^Last updated:.*$/m, `Last updated: ${tod()}`);
+  wf(foodsPath, content);
+  res.json({ ok: true });
 });
 
 // Variants for a disliked food
@@ -647,7 +682,7 @@ function getActive5DayIntros(profile) {
   const active  = {};
   let currentSlot = '';
 
-  // Build header → slotId map from profile (label and id both match)
+  // Build header â†’ slotId map from profile (label and id both match)
   const headerMap = {};
   p.slots.forEach(s => {
     headerMap[s.label.toLowerCase()] = s.id;
@@ -661,7 +696,7 @@ function getActive5DayIntros(profile) {
 
   for (const line of content.split('\n')) {
     if (line.startsWith('## ')) {
-      const header = line.slice(3).split('—')[0].trim().toLowerCase();
+      const header = line.slice(3).split('â€”')[0].trim().toLowerCase();
       // Find first matching slot key inside the header string
       currentSlot = Object.entries(headerMap).find(([k]) => header.includes(k))?.[1] || '';
     }
@@ -746,7 +781,7 @@ function writeFoodsTriedFromOnboarding(profile, foodsIntroduced, activeIntros) {
 
 const SCHEDULED_PATH = path.join(GORDON_DIR, 'SCHEDULED-MEALS.json');
 
-// POST /api/schedule-meal — save a chosen variation for a future date
+// POST /api/schedule-meal â€” save a chosen variation for a future date
 app.post('/api/schedule-meal', (req, res) => {
   const { date, slot, food, recipe, dayNumber, daysRemaining } = req.body;
   const data = rj(SCHEDULED_PATH) || {};
@@ -756,7 +791,7 @@ app.post('/api/schedule-meal', (req, res) => {
   res.json({ success: true });
 });
 
-// GET /api/today-suggestion — pre-populated menu for Today tab
+// GET /api/today-suggestion â€” pre-populated menu for Today tab
 // Priority: scheduled > week plan > active 5-day intro > roadmap > Gordon fallback
 app.get('/api/today-suggestion', async (req, res) => {
   const today      = tod();
@@ -774,7 +809,7 @@ app.get('/api/today-suggestion', async (req, res) => {
   const todayName   = new Date().toLocaleDateString('en-US', { weekday: 'long' });
   const todayEntry  = weekPlan?.days?.find(d => d.day.toLowerCase() === todayName.toLowerCase());
 
-  // Week plan checked first for all unscheduled slots — it IS the source of truth
+  // Week plan checked first for all unscheduled slots â€” it IS the source of truth
   const weekPlanFoods = {};
   const slotsAfterPlan = [];
   for (const slot of allSlotIds.filter(s => !sched[s])) {
@@ -803,7 +838,7 @@ app.get('/api/today-suggestion', async (req, res) => {
     const prompt = `${buildGordonPrompt()}
 
 TODAY'S TASK: Suggest one food for each of these slots only: ${slotsNeedingGordon.map(s=>s.toUpperCase()).join(', ')}.
-These slots have no active 5-day introduction and no roadmap entry this week. Use RECENT-MEALS and PREFERENCES — no repeats, no dislikes.
+These slots have no active 5-day introduction and no roadmap entry this week. Use RECENT-MEALS and PREFERENCES â€” no repeats, no dislikes.
 
 Return ONLY these lines, nothing else:
 ${lines}`;
@@ -850,7 +885,7 @@ ${lines}`;
   res.json({ suggestion });
 });
 
-// POST /api/dislike-variations — day-by-day variation schedule for remaining 5-day window
+// POST /api/dislike-variations â€” day-by-day variation schedule for remaining 5-day window
 app.post('/api/dislike-variations', async (req, res) => {
   const { food, daysRemaining } = req.body;
   const profile = loadProfile();
@@ -863,7 +898,7 @@ app.post('/api/dislike-variations', async (req, res) => {
   const prompt = `You are Gordon, infant nutrition expert. ${profile.name} is ${age.months} months ${age.days} days old. ${dietLabel}.
 
 ${pr.sub.charAt(0).toUpperCase() + pr.sub.slice(1)} showed dislike for: ${food}.
-The 5-day rule requires ${daysRemaining} more day(s) of exposure to ${food} — do NOT switch to a different food.
+The 5-day rule requires ${daysRemaining} more day(s) of exposure to ${food} â€” do NOT switch to a different food.
 Generate exactly ${daysRemaining} day-by-day variation(s) using ${food} as the hero ingredient to improve acceptance.
 Different preparation each day. Indian vegetarian. Smooth to mashed. No salt, sugar, honey, whole nuts.
 
@@ -918,8 +953,8 @@ Your job:
 1. Is this a real developmental milestone? (look for motor, language, social, cognitive, feeding, sleep skills)
 2. If yes: match to closest item in the known list, or name it if genuinely new
 3. Determine: category, benchmark month, is ${profile.name} ahead/on-track/behind?
-4. ${profile.name}'s age in months: ${age.months + age.days/30.4} — compare to benchmark month
-   - "on_track": within the expected month window (±3 weeks)
+4. ${profile.name}'s age in months: ${age.months + age.days/30.4} â€” compare to benchmark month
+   - "on_track": within the expected month window (Â±3 weeks)
    - "ahead": achieving 1-4 weeks before benchmark
    - "significantly_ahead": achieving 5+ weeks before benchmark
    - "monitor": not yet achieved but past the typical window
@@ -965,7 +1000,7 @@ If not a milestone:
   }
 });
 
-// Food roadmap — Gordon-generated, cached in FOOD-ROADMAP.json
+// Food roadmap â€” Gordon-generated, cached in FOOD-ROADMAP.json
 app.get('/api/food-roadmap', async (req, res) => {
   const profile = loadProfile();
   const age     = getBabyAge(profile);
@@ -976,7 +1011,7 @@ app.get('/api/food-roadmap', async (req, res) => {
     catch(e) { return res.status(500).json({ error: 'Roadmap generation failed: ' + e.message }); }
   }
 
-  // Map semantic slot names → actual profile slot IDs
+  // Map semantic slot names â†’ actual profile slot IDs
   const slotMap = {
     snack1: profile.slots[0]?.id || 'snack1',
     lunch:  profile.slots[1]?.id || 'lunch',
@@ -1097,7 +1132,7 @@ app.get('/api/progress', (req, res) => {
   });
 });
 
-// ── Week plan generation helper ───────────────────────────────────────────────
+// â”€â”€ Week plan generation helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function generateWeekPlan(month, week, profile) {
   const age  = getBabyAge(profile);
   const pr   = pronouns(profile);
@@ -1114,8 +1149,8 @@ async function generateWeekPlan(month, week, profile) {
 
   const dietMap = {
     'vegetarian':     'strict vegetarian, no eggs/meat/fish',
-    'eggetarian':     'eggetarian — eggs ok, no meat/fish',
-    'pescatarian':    'pescatarian — fish and eggs ok, no meat',
+    'eggetarian':     'eggetarian â€” eggs ok, no meat/fish',
+    'pescatarian':    'pescatarian â€” fish and eggs ok, no meat',
     'non-vegetarian': 'non-vegetarian, include eggs/chicken/fish when age-appropriate',
   };
   const dietNote = dietMap[profile.dietary] || profile.dietary;
@@ -1143,13 +1178,13 @@ MEAL SLOTS: ${slotsDesc}
 
 RULES:
 - Each recipe max 2 sentences. Practical, Indian home kitchen style.
-- Vary the preparation each day — not the same recipe repeated.
+- Vary the preparation each day â€” not the same recipe repeated.
 - If a slot has no hero food, use a previously-tried food the baby likes.
 - No salt, sugar, honey, or whole nuts. Ghee and mild spices (cumin, turmeric, ajwain) are fine.
 - Only include foods appropriate for ${age.months} months old.
 - Diet: ${dietNote}
 
-Return ONLY valid JSON — no markdown fences, no explanation:
+Return ONLY valid JSON â€” no markdown fences, no explanation:
 {"days":[
 ${dayTemplate}
 ]}`;
@@ -1201,7 +1236,7 @@ function overlayScheduled(plan, month, week, profile) {
   return result;
 }
 
-// POST /api/week-plan — serve cached or generate
+// POST /api/week-plan â€” serve cached or generate
 app.post('/api/week-plan', async (req, res) => {
   const { month, week } = req.body;
   const profile = loadProfile();
@@ -1213,7 +1248,7 @@ app.post('/api/week-plan', async (req, res) => {
   res.json(overlayScheduled(plan, month, week, profile));
 });
 
-// GET /api/week-plan/:month/:week — return cached plan or generate on demand
+// GET /api/week-plan/:month/:week â€” return cached plan or generate on demand
 app.get('/api/week-plan/:month/:week', async (req, res) => {
   const month = parseInt(req.params.month);
   const week  = parseInt(req.params.week);
@@ -1226,7 +1261,7 @@ app.get('/api/week-plan/:month/:week', async (req, res) => {
   res.json(overlayScheduled(plan, month, week, profile));
 });
 
-// ── Profile & Settings ────────────────────────────────────────────────────────
+// â”€â”€ Profile & Settings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 app.get('/api/profile', (req, res) => {
   const profile = rj(PROFILE_PATH);
@@ -1299,7 +1334,7 @@ app.put('/api/settings', (req, res) => {
 
   // Warn about removed slots
   const removed = existingIds.filter(id => !newIds.includes(id));
-  if (removed.length) console.warn(`[settings] Slots removed from profile: ${removed.join(', ')} — historical log data preserved`);
+  if (removed.length) console.warn(`[settings] Slots removed from profile: ${removed.join(', ')} â€” historical log data preserved`);
 
   const updated = { ...current, dietary, slots: processedSlots, updatedAt: new Date().toISOString() };
   wj(PROFILE_PATH, updated);
@@ -1307,7 +1342,7 @@ app.put('/api/settings', (req, res) => {
   // Invalidate roadmap cache if dietary preference changed
   if (dietary !== current.dietary) {
     try { fs.unlinkSync(ROADMAP_PATH); } catch {}
-    console.log(`[settings] Dietary changed ${current.dietary} → ${dietary}. Roadmap cache cleared.`);
+    console.log(`[settings] Dietary changed ${current.dietary} â†’ ${dietary}. Roadmap cache cleared.`);
   }
 
   res.json({ success: true, profile: updated });
@@ -1315,5 +1350,5 @@ app.put('/api/settings', (req, res) => {
 
 app.listen(3001, () => {
   const p = loadProfile();
-  console.log(`🍼 ${p.name}'s Firsts → http://localhost:3001`);
+  console.log(`ðŸ¼ ${p.name}'s Firsts â†’ http://localhost:3001`);
 });
