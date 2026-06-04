@@ -2129,12 +2129,17 @@ async function confirmSaveMilestone() {
 // ── PROGRESS TAB ──────────────────────────────────────────────────────────────
 async function loadProgress() {
   tabLoaded.progress = true;
-  [appointmentsData, growthData, growthCurves, foodsSummaryData] = await Promise.all([
-    fetch('/api/appointments').then(r => r.json()),
-    fetch('/api/growth').then(r => r.json()),
-    fetch('/api/growth-curves').then(r => r.json()),
-    fetch('/api/foods-summary').then(r => r.json()),
-  ]);
+  try {
+    [appointmentsData, growthData, growthCurves, foodsSummaryData] = await Promise.all([
+      fetch('/api/appointments').then(r => r.json()),
+      fetch('/api/growth').then(r => r.json()),
+      fetch('/api/growth-curves').then(r => r.json()),
+      fetch('/api/foods-summary').then(r => r.json()),
+    ]);
+  } catch (e) {
+    document.getElementById('appt-next').innerHTML = '<div class="text-xs text-red-400 py-2">Failed to load — refresh to try again</div>';
+    return;
+  }
   renderAppointments();
   renderGrowthSection();
   renderFoodsSection();
@@ -2259,7 +2264,7 @@ function renderPastApptCard(appt) {
             <button onclick="saveMeasurements('${escAttr(appt.id)}')"
               class="text-xs font-semibold px-2 py-1.5 rounded-lg text-white" style="background:var(--peach)">Save</button>
           </div>` : `
-          <div class="text-xs text-gray-500 mb-3">${appt.height} cm · ${appt.weight} kg</div>`}
+          <div class="text-xs text-gray-500 mb-3">${escHtml(String(appt.height))} cm · ${escHtml(String(appt.weight))} kg</div>`}
         ${appt.questions.length === 0
           ? '<div class="text-xs text-gray-300">No questions recorded</div>'
           : appt.questions.map(q => `
@@ -2271,6 +2276,13 @@ function renderPastApptCard(appt) {
     </div>`;
 }
 
+async function reloadAppointments() {
+  try {
+    appointmentsData = await fetch('/api/appointments').then(r => r.json());
+  } catch (e) { /* keep stale data on network error */ }
+  renderAppointments();
+}
+
 async function createAppointment() {
   const date = document.getElementById('new-appt-date')?.value;
   if (!date) return;
@@ -2279,8 +2291,7 @@ async function createAppointment() {
     body: JSON.stringify({ date }),
   }).then(r => r.json());
   if (resp.ok) {
-    appointmentsData = await fetch('/api/appointments').then(r => r.json());
-    renderAppointments();
+    await reloadAppointments();
   }
 }
 
@@ -2291,8 +2302,7 @@ async function updateApptDate(apptId) {
     method: 'PATCH', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ date }),
   });
-  appointmentsData = await fetch('/api/appointments').then(r => r.json());
-  renderAppointments();
+  await reloadAppointments();
 }
 
 async function addQuestion(apptId) {
@@ -2304,8 +2314,7 @@ async function addQuestion(apptId) {
     body: JSON.stringify({ text, source: 'manual' }),
   });
   input.value = '';
-  appointmentsData = await fetch('/api/appointments').then(r => r.json());
-  renderAppointments();
+  await reloadAppointments();
 }
 
 function startAnswerQuestion(apptId, qid) {
@@ -2318,14 +2327,12 @@ async function saveAnswer(apptId, qid) {
     method: 'PATCH', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ answered: true, answer }),
   });
-  appointmentsData = await fetch('/api/appointments').then(r => r.json());
-  renderAppointments();
+  await reloadAppointments();
 }
 
 async function deleteQuestion(apptId, qid) {
   await fetch(`/api/appointments/${apptId}/questions/${qid}`, { method: 'DELETE' });
-  appointmentsData = await fetch('/api/appointments').then(r => r.json());
-  renderAppointments();
+  await reloadAppointments();
 }
 
 async function moveQuestion(apptId, qid) {
@@ -2336,8 +2343,7 @@ async function moveQuestion(apptId, qid) {
     alert('No next appointment — create one first');
     return;
   }
-  appointmentsData = await fetch('/api/appointments').then(r => r.json());
-  renderAppointments();
+  await reloadAppointments();
 }
 
 async function saveMeasurements(apptId) {
@@ -2348,8 +2354,7 @@ async function saveMeasurements(apptId) {
     method: 'PATCH', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ height, weight }),
   });
-  appointmentsData = await fetch('/api/appointments').then(r => r.json());
-  renderAppointments();
+  await reloadAppointments();
 }
 
 function toggleAppt(apptId) {
