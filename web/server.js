@@ -1573,7 +1573,7 @@ app.get('/api/week-plan/:month/:week', async (req, res) => {
 
 app.get('/api/profile', (req, res) => {
   const p = loadProfile();
-  res.json({ name: p.name, dob: p.dob, gender: p.gender });
+  res.json({ name: p.name, dob: p.dob, gender: p.gender, slots: p.slots });
 });
 
 app.post('/api/profile', (req, res) => {

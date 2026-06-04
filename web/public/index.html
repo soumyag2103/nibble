@@ -512,7 +512,7 @@ async function init() {
 
 async function initWithProfile(profile) {
   appProfile = profile;
-  if (profile.slots) buildSlotMeta(profile.slots);
+  buildSlotMeta(profile.slots);
 
   // Update static UI with profile name
   document.getElementById('header-title').textContent = `🍼 ${profile.name}'s Firsts`;
