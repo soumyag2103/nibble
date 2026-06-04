@@ -1572,9 +1572,8 @@ app.get('/api/week-plan/:month/:week', async (req, res) => {
 // ── Profile & Settings ────────────────────────────────────────────────────────
 
 app.get('/api/profile', (req, res) => {
-  const profile = rj(PROFILE_PATH);
-  if (!profile) return res.json({ exists: false });
-  res.json({ exists: true, profile });
+  const p = loadProfile();
+  res.json({ name: p.name, dob: p.dob, gender: p.gender });
 });
 
 app.post('/api/profile', (req, res) => {

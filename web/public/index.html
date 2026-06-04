@@ -503,16 +503,16 @@ function buildSlotMeta(slots) {
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
   const profileResp = await fetch('/api/profile').then(r => r.json());
-  if (!profileResp.exists) {
+  if (!profileResp.name || !profileResp.dob) {
     showOnboarding();
     return;
   }
-  await initWithProfile(profileResp.profile);
+  await initWithProfile(profileResp);
 }
 
 async function initWithProfile(profile) {
   appProfile = profile;
-  buildSlotMeta(profile.slots);
+  if (profile.slots) buildSlotMeta(profile.slots);
 
   // Update static UI with profile name
   document.getElementById('header-title').textContent = `🍼 ${profile.name}'s Firsts`;
@@ -2461,6 +2461,8 @@ async function saveEditGrowth(id) {
 
 function initGrowthCharts() {
   const dob = new Date(window._babyDob || '2025-11-11');
+  if (growthHeightChart) { growthHeightChart.destroy(); growthHeightChart = null; }
+  if (growthWeightChart) { growthWeightChart.destroy(); growthWeightChart = null; }
 
   function ageMonths(dateStr) {
     const d = new Date(dateStr);
@@ -2504,9 +2506,6 @@ function initGrowthCharts() {
       { data: babyPts, fill: false, borderColor: babyColor, backgroundColor: babyColor, borderWidth: 2.5, tension: 0.3, pointRadius: 4, pointBackgroundColor: babyColor },
     ];
   }
-
-  if (growthHeightChart) { growthHeightChart.destroy(); growthHeightChart = null; }
-  if (growthWeightChart) { growthWeightChart.destroy(); growthWeightChart = null; }
 
   growthHeightChart = new Chart(document.getElementById('chart-height'), {
     type: 'line',
