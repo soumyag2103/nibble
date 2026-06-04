@@ -35,6 +35,33 @@ function loadAppointments() {
   return data.sort((a, b) => a.date.localeCompare(b.date));
 }
 function saveAppointments(data) { wj(APPOINTMENTS_PATH, data); }
+
+// WHO Child Growth Standards — Girls, 0–24 months
+const WHO_GIRLS = {
+  weight: {
+    months: [0,1,2,3,4,5,6,7,8,9,10,11,12,15,18,21,24],
+    p3:  [2.4,3.2,3.9,4.5,5.0,5.4,5.7,6.0,6.3,6.6,6.8,7.0,7.1,7.6,8.1,8.6,9.0],
+    p15: [2.8,3.6,4.5,5.2,5.7,6.1,6.5,6.8,7.1,7.4,7.7,7.9,8.1,8.7,9.2,9.7,10.2],
+    p50: [3.2,4.2,5.1,5.8,6.4,6.9,7.3,7.6,7.9,8.2,8.5,8.7,8.9,9.6,10.2,10.9,11.5],
+    p85: [3.7,4.8,5.8,6.6,7.3,7.8,8.3,8.7,9.1,9.4,9.7,10.0,10.2,11.0,11.8,12.5,13.2],
+    p97: [4.2,5.5,6.6,7.5,8.2,8.8,9.3,9.8,10.2,10.5,10.9,11.2,11.5,12.4,13.2,14.0,14.8],
+  },
+  height: {
+    months: [0,1,2,3,4,5,6,7,8,9,10,11,12,15,18,21,24],
+    p3:  [44.8,48.9,52.4,55.3,57.7,59.6,61.2,62.7,64.0,65.3,66.5,67.6,68.6,72.0,75.0,77.5,80.0],
+    p15: [46.1,50.2,53.8,56.7,59.1,61.1,62.7,64.3,65.6,67.0,68.2,69.3,70.4,73.8,76.9,79.6,82.1],
+    p50: [49.1,53.7,57.1,59.8,62.1,64.0,65.7,67.3,68.7,70.1,71.5,72.8,74.0,77.5,80.7,83.5,86.4],
+    p85: [51.0,55.6,59.1,61.9,64.3,66.2,68.0,69.6,71.1,72.5,73.8,75.2,76.6,80.2,83.5,86.4,89.4],
+    p97: [52.9,57.6,61.1,64.0,66.4,68.5,70.3,71.9,73.5,74.9,76.3,77.7,79.2,82.9,86.4,89.3,92.4],
+  },
+};
+
+function loadGrowth() {
+  const data = rj(GROWTH_PATH) || [];
+  return data.sort((a, b) => a.date.localeCompare(b.date));
+}
+function saveGrowth(data) { wj(GROWTH_PATH, data); }
+
 function nextAppointment(data) {
   const today = tod();
   return data.find(a => a.date >= today) || null;
@@ -1230,6 +1257,54 @@ app.get('/api/progress', (req, res) => {
     reactions,
     age: getBabyAge(profile),
   });
+});
+
+// ── Growth tracking ───────────────────────────────────────────────────────────
+
+app.get('/api/growth-curves', (req, res) => {
+  res.json(WHO_GIRLS);
+});
+
+app.get('/api/growth', (req, res) => {
+  res.json(loadGrowth());
+});
+
+app.post('/api/growth', (req, res) => {
+  const { date, heightCm, weightKg } = req.body;
+  if (!date || heightCm == null || weightKg == null)
+    return res.status(400).json({ error: 'date, heightCm, weightKg required' });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date))
+    return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
+  const data = loadGrowth();
+  const entry = { id: `g_${Date.now()}`, date, heightCm: Number(heightCm), weightKg: Number(weightKg) };
+  data.push(entry);
+  data.sort((a, b) => a.date.localeCompare(b.date));
+  saveGrowth(data);
+  res.json({ ok: true, entry });
+});
+
+app.patch('/api/growth/:id', (req, res) => {
+  const { date, heightCm, weightKg } = req.body;
+  const data = loadGrowth();
+  const entry = data.find(e => e.id === req.params.id);
+  if (!entry) return res.status(404).json({ error: 'not found' });
+  if (date !== undefined) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date))
+      return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
+    entry.date = date;
+  }
+  if (heightCm !== undefined) entry.heightCm = Number(heightCm);
+  if (weightKg !== undefined) entry.weightKg = Number(weightKg);
+  data.sort((a, b) => a.date.localeCompare(b.date));
+  saveGrowth(data);
+  res.json({ ok: true, entry });
+});
+
+app.delete('/api/growth/:id', (req, res) => {
+  const data = loadGrowth();
+  const updated = data.filter(e => e.id !== req.params.id);
+  saveGrowth(updated);
+  res.json({ ok: true });
 });
 
 // ── Appointments ──────────────────────────────────────────────────────────────
