@@ -1241,6 +1241,8 @@ app.get('/api/appointments', (req, res) => {
 app.post('/api/appointments', (req, res) => {
   const { date } = req.body;
   if (!date) return res.status(400).json({ error: 'date required' });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date))
+    return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
   const data = loadAppointments();
   const appt = { id: `appt_${Date.now()}`, date, height: null, weight: null, questions: [] };
   data.push(appt);
@@ -1252,14 +1254,16 @@ app.post('/api/appointments', (req, res) => {
 app.patch('/api/appointments/:id', (req, res) => {
   const { date, height, weight } = req.body;
   const data = loadAppointments();
-  const idx  = data.findIndex(a => a.id === req.params.id);
-  if (idx < 0) return res.status(404).json({ error: 'not found' });
-  if (date   !== undefined) data[idx].date   = date;
-  if (height !== undefined) data[idx].height = height;
-  if (weight !== undefined) data[idx].weight = weight;
+  const appt = data.find(a => a.id === req.params.id);
+  if (!appt) return res.status(404).json({ error: 'not found' });
+  if (date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(date))
+    return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
+  if (date   !== undefined) appt.date   = date;
+  if (height !== undefined) appt.height = height;
+  if (weight !== undefined) appt.weight = weight;
   data.sort((a, b) => a.date.localeCompare(b.date));
   saveAppointments(data);
-  res.json({ ok: true, appointment: data[idx] });
+  res.json({ ok: true, appointment: appt });
 });
 
 // Convenience: add question to the next upcoming appointment
