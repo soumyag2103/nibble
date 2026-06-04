@@ -2520,6 +2520,63 @@ function initGrowthCharts() {
   });
 }
 
+function renderFoodsSection() {
+  const tried    = foodsSummaryData.filter(f => !f.rejected);
+  const rejected = foodsSummaryData.filter(f => f.rejected);
+
+  document.getElementById('foods-tried-list').innerHTML = tried.length === 0
+    ? '<div class="text-xs text-gray-300">No foods logged yet</div>'
+    : tried.map(f => renderFoodCard(f)).join('');
+
+  document.getElementById('foods-rejected-list').innerHTML = rejected.length === 0
+    ? '<div class="text-xs text-gray-300">No rejected foods yet 🎉</div>'
+    : rejected.map(f => renderFoodCard(f)).join('');
+}
+
+function renderFoodCard(f) {
+  const isOpen = expandedFoodName === f.name.toLowerCase();
+  const dominant = Object.entries(f.reactions).sort((a,b) => b[1]-a[1])[0];
+  const emoji = { Loved:'😍', Liked:'😊', Neutral:'😐', Disliked:'😖' }[dominant?.[0]] || '🍽';
+
+  if (!isOpen) {
+    return `
+      <div onclick="toggleFood('${escAttr(f.name.toLowerCase())}')"
+        class="cursor-pointer flex items-center justify-between py-2 px-3 rounded-lg bg-gray-50">
+        <span class="text-sm font-medium text-gray-700">${escHtml(f.name)}</span>
+        <span class="text-xs text-gray-400">${emoji} ×${f.totalEntries} ›</span>
+      </div>`;
+  }
+
+  const total = f.totalEntries || 1;
+  const rxColors = { Loved:'#FACC15', Liked:'#4ADE80', Neutral:'#94A3B8', Disliked:'#F87171' };
+  const bars = Object.entries(f.reactions)
+    .filter(([, v]) => v > 0)
+    .map(([k, v]) => `
+      <div class="flex items-center gap-2 mb-1">
+        <div class="text-xs text-gray-500 w-14">${escHtml(k)}</div>
+        <div class="flex-1 bg-gray-100 rounded-full overflow-hidden" style="height:7px">
+          <div style="width:${Math.round(v/total*100)}%;height:7px;background:${rxColors[k]};border-radius:9999px"></div>
+        </div>
+        <div class="text-xs text-gray-400 w-4 text-right">${v}</div>
+      </div>`).join('');
+
+  return `
+    <div onclick="toggleFood('${escAttr(f.name.toLowerCase())}')" class="cursor-pointer rounded-lg bg-gray-50 overflow-hidden">
+      <div class="flex items-center justify-between py-2 px-3">
+        <span class="text-sm font-semibold text-gray-700">${escHtml(f.name)} ×${f.totalEntries}</span>
+        <span class="text-xs text-gray-400">‹</span>
+      </div>
+      <div class="px-3 pb-3" onclick="event.stopPropagation()">
+        ${bars}
+      </div>
+    </div>`;
+}
+
+function toggleFood(name) {
+  expandedFoodName = (expandedFoodName === name) ? null : name;
+  renderFoodsSection();
+}
+
 // ── Utils ─────────────────────────────────────────────────────────────────────
 function escHtml(t) {
   return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
