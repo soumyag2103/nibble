@@ -1422,16 +1422,83 @@ async function confirmDoctorQuestion(cardId) {
   const card = document.getElementById(cardId);
   if (card) card.innerHTML = `<div class="text-xs text-gray-400 py-2">Saving...</div>`;
 
-  const resp = await fetch('/api/log-doctor-question', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question }),
-  }).then(r => r.json());
+  let resp;
+  try {
+    resp = await fetch('/api/appointments/next/questions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: question, source: 'chat' }),
+    }).then(r => r.json());
+  } catch (e) {
+    if (card) card.innerHTML = `<div class="text-xs text-red-400 py-2">Error saving. Try again.</div>`;
+    return;
+  }
 
-  if (card) {
-    card.innerHTML = resp.ok
-      ? `<div class="text-xs text-green-500 py-2">✓ Added to doctor visit questions (#${resp.questionNumber})</div>`
-      : `<div class="text-xs text-red-400 py-2">Error saving. Try again.</div>`;
+  if (!card) return;
+
+  if (resp.error === 'no_next_appointment') {
+    card.innerHTML = `<div class="text-xs text-orange-500 py-2">No upcoming appointment set — add one in the Progress tab first</div>`;
+    return;
+  }
+
+  if (!resp.ok) {
+    card.innerHTML = `<div class="text-xs text-red-400 py-2">Error saving. Try again.</div>`;
+    return;
+  }
+
+  const apptId = resp.appointmentId;
+  const qid    = resp.question.id;
+  card.innerHTML = `
+    <div class="text-xs text-green-600 font-medium mb-2">✓ Added to appointment questions</div>
+    <div class="text-xs text-gray-500 mb-1">Want to add more details?</div>
+    <div class="flex gap-2">
+      <input type="text" id="${cardId}-details" placeholder="Any extra context…"
+        class="flex-1 bg-gray-50 rounded-lg px-2 py-1.5 text-xs border border-gray-100" style="min-width:0">
+      <button onclick="saveQuestionDetails('${escAttr(apptId)}','${escAttr(qid)}','${cardId}')"
+        class="text-xs font-semibold px-3 py-1.5 rounded-lg text-white" style="background:var(--sage)">Save</button>
+      <button onclick="document.getElementById('${cardId}').innerHTML='<div class=\\'text-xs text-green-500 py-2\\'>✓ Saved</div>'"
+        class="text-xs text-gray-400 py-1.5">Skip</button>
+    </div>`;
+
+  if (tabLoaded.progress) {
+    try {
+      appointmentsData = await fetch('/api/appointments').then(r => r.json());
+      renderAppointments();
+    } catch (e) { /* non-critical */ }
+  }
+}
+
+async function saveQuestionDetails(apptId, qid, cardId) {
+  const details = document.getElementById(`${cardId}-details`)?.value.trim();
+  if (!details) {
+    document.getElementById(cardId).innerHTML = '<div class="text-xs text-green-500 py-2">✓ Saved</div>';
+    return;
+  }
+  // Find the question to prepend the extra details
+  let currentText = details;
+  try {
+    const allAppts = await fetch('/api/appointments').then(r => r.json());
+    const appt = allAppts.find(a => a.id === apptId);
+    const q = appt?.questions.find(q => q.id === qid);
+    if (q) currentText = `${q.text} — ${details}`;
+  } catch (e) { /* use details alone as fallback */ }
+
+  try {
+    await fetch(`/api/appointments/${apptId}/questions/${qid}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: currentText }),
+    });
+  } catch (e) {
+    document.getElementById(cardId).innerHTML = '<div class="text-xs text-red-400 py-2">Error saving details.</div>';
+    return;
+  }
+
+  document.getElementById(cardId).innerHTML = '<div class="text-xs text-green-500 py-2">✓ Saved with details</div>';
+  if (tabLoaded.progress) {
+    try {
+      appointmentsData = await fetch('/api/appointments').then(r => r.json());
+      renderAppointments();
+    } catch (e) { /* non-critical */ }
   }
 }
 
