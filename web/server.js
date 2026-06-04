@@ -16,6 +16,8 @@ const LOGS_DIR     = path.join(WORKSPACE, 'logs');
 const PROFILE_PATH = path.join(WORKSPACE, 'agents', 'profile', 'BABY-PROFILE.json');
 const ROADMAP_PATH     = path.join(WORKSPACE, 'agents', 'gordon', 'FOOD-ROADMAP.json');
 const WEEK_PLANS_PATH  = path.join(WORKSPACE, 'agents', 'gordon', 'WEEK-PLANS.json');
+const APPOINTMENTS_PATH = path.join(WORKSPACE, 'agents', 'appointments', 'APPOINTMENTS.json');
+const GROWTH_PATH       = path.join(WORKSPACE, 'agents', 'growth', 'GROWTH.json');
 
 const DEFAULT_PROFILE = {
   name: 'Baby', dob: new Date().toISOString().split('T')[0], gender: 'other',
@@ -28,6 +30,15 @@ const DEFAULT_PROFILE = {
 };
 
 function loadProfile() { return rj(PROFILE_PATH) || DEFAULT_PROFILE; }
+function loadAppointments() {
+  const data = rj(APPOINTMENTS_PATH) || [];
+  return data.sort((a, b) => a.date.localeCompare(b.date));
+}
+function saveAppointments(data) { wj(APPOINTMENTS_PATH, data); }
+function nextAppointment(data) {
+  const today = tod();
+  return data.find(a => a.date >= today) || null;
+}
 
 function slugify(label, existing = []) {
   let base = label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g,'');
@@ -1219,6 +1230,100 @@ app.get('/api/progress', (req, res) => {
     reactions,
     age: getBabyAge(profile),
   });
+});
+
+// ── Appointments ──────────────────────────────────────────────────────────────
+
+app.get('/api/appointments', (req, res) => {
+  res.json(loadAppointments());
+});
+
+app.post('/api/appointments', (req, res) => {
+  const { date } = req.body;
+  if (!date) return res.status(400).json({ error: 'date required' });
+  const data = loadAppointments();
+  const appt = { id: `appt_${Date.now()}`, date, height: null, weight: null, questions: [] };
+  data.push(appt);
+  data.sort((a, b) => a.date.localeCompare(b.date));
+  saveAppointments(data);
+  res.json({ ok: true, appointment: appt });
+});
+
+app.patch('/api/appointments/:id', (req, res) => {
+  const { date, height, weight } = req.body;
+  const data = loadAppointments();
+  const idx  = data.findIndex(a => a.id === req.params.id);
+  if (idx < 0) return res.status(404).json({ error: 'not found' });
+  if (date   !== undefined) data[idx].date   = date;
+  if (height !== undefined) data[idx].height = height;
+  if (weight !== undefined) data[idx].weight = weight;
+  data.sort((a, b) => a.date.localeCompare(b.date));
+  saveAppointments(data);
+  res.json({ ok: true, appointment: data[idx] });
+});
+
+// Convenience: add question to the next upcoming appointment
+app.post('/api/appointments/next/questions', (req, res) => {
+  const { text, source = 'chat' } = req.body;
+  if (!text) return res.status(400).json({ error: 'text required' });
+  const data = loadAppointments();
+  const appt = nextAppointment(data);
+  if (!appt) return res.status(404).json({ error: 'no_next_appointment' });
+  const q = { id: `q_${Date.now()}`, text, timestamp: new Date().toISOString(), source, answered: false, answer: '' };
+  appt.questions.push(q);
+  saveAppointments(data);
+  res.json({ ok: true, question: q, appointmentId: appt.id });
+});
+
+app.post('/api/appointments/:id/questions', (req, res) => {
+  const { text, source = 'manual' } = req.body;
+  if (!text) return res.status(400).json({ error: 'text required' });
+  const data = loadAppointments();
+  const appt = data.find(a => a.id === req.params.id);
+  if (!appt) return res.status(404).json({ error: 'not found' });
+  const q = { id: `q_${Date.now()}`, text, timestamp: new Date().toISOString(), source, answered: false, answer: '' };
+  appt.questions.push(q);
+  saveAppointments(data);
+  res.json({ ok: true, question: q });
+});
+
+app.patch('/api/appointments/:id/questions/:qid', (req, res) => {
+  const { text, answered, answer } = req.body;
+  const data = loadAppointments();
+  const appt = data.find(a => a.id === req.params.id);
+  if (!appt) return res.status(404).json({ error: 'not found' });
+  const q = appt.questions.find(q => q.id === req.params.qid);
+  if (!q) return res.status(404).json({ error: 'question not found' });
+  if (text     !== undefined) q.text     = text;
+  if (answered !== undefined) q.answered = answered;
+  if (answer   !== undefined) q.answer   = answer;
+  saveAppointments(data);
+  res.json({ ok: true, question: q });
+});
+
+app.delete('/api/appointments/:id/questions/:qid', (req, res) => {
+  const data = loadAppointments();
+  const appt = data.find(a => a.id === req.params.id);
+  if (!appt) return res.status(404).json({ error: 'not found' });
+  appt.questions = appt.questions.filter(q => q.id !== req.params.qid);
+  saveAppointments(data);
+  res.json({ ok: true });
+});
+
+app.post('/api/appointments/:id/questions/:qid/move', (req, res) => {
+  const data  = loadAppointments();
+  const today = tod();
+  const from  = data.find(a => a.id === req.params.id);
+  if (!from) return res.status(404).json({ error: 'not found' });
+  const q = from.questions.find(q => q.id === req.params.qid);
+  if (!q) return res.status(404).json({ error: 'question not found' });
+  // Find next upcoming appointment that is NOT this one
+  const to = data.find(a => a.date >= today && a.id !== req.params.id);
+  if (!to) return res.status(404).json({ error: 'no_next_appointment' });
+  from.questions = from.questions.filter(x => x.id !== req.params.qid);
+  to.questions.push({ ...q, timestamp: new Date().toISOString() });
+  saveAppointments(data);
+  res.json({ ok: true });
 });
 
 // ── Week plan generation helper ───────────────────────────────────────────────
