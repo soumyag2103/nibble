@@ -429,6 +429,8 @@ let foodsSummaryData  = [];
 let growthCurves      = null;
 let expandedApptId    = null;
 let expandedFoodName  = null;
+let growthHeightChart = null;
+let growthWeightChart = null;
 let tabLoaded = { today: false, chat: false, plans: false, milestones: false, progress: false };
 
 
@@ -515,6 +517,8 @@ async function initWithProfile(profile) {
   // Update static UI with profile name
   document.getElementById('header-title').textContent = `🍼 ${profile.name}'s Firsts`;
   document.title = `${profile.name} — Firsts`;
+
+  window._babyDob = profile.dob;
 
   const [status, log, foods, suggestResp] = await Promise.all([
     fetch('/api/status').then(r=>r.json()),
@@ -2360,6 +2364,161 @@ async function saveMeasurements(apptId) {
 function toggleAppt(apptId) {
   expandedApptId = (expandedApptId === apptId) ? null : apptId;
   renderAppointments();
+}
+
+function renderGrowthSection() {
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('growth-form').innerHTML = `
+    <div class="grid grid-cols-2 gap-2 mb-2">
+      <div>
+        <label class="text-xs text-gray-400">Date</label>
+        <input type="date" id="gr-date" value="${today}"
+          class="w-full bg-gray-50 rounded-lg px-2 py-2 text-xs border border-gray-100 mt-0.5">
+      </div>
+      <div>
+        <label class="text-xs text-gray-400">Height (cm)</label>
+        <input type="number" id="gr-height" step="0.1" placeholder="e.g. 65.5"
+          class="w-full bg-gray-50 rounded-lg px-2 py-2 text-xs border border-gray-100 mt-0.5">
+      </div>
+      <div>
+        <label class="text-xs text-gray-400">Weight (kg)</label>
+        <input type="number" id="gr-weight" step="0.01" placeholder="e.g. 7.2"
+          class="w-full bg-gray-50 rounded-lg px-2 py-2 text-xs border border-gray-100 mt-0.5">
+      </div>
+      <div class="flex items-end">
+        <button onclick="addGrowthEntry()"
+          class="w-full text-xs font-semibold py-2 rounded-lg text-white" style="background:var(--sage)">
+          + Add entry
+        </button>
+      </div>
+    </div>`;
+
+  document.getElementById('growth-entries').innerHTML = growthData.length === 0
+    ? '<div class="text-xs text-gray-300">No entries yet</div>'
+    : growthData.map(e => {
+        const d = new Date(e.date).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' });
+        return `
+          <div id="gentry-${escAttr(e.id)}" class="flex items-center justify-between text-xs text-gray-600 py-1 border-b border-gray-50">
+            <span>${d}</span>
+            <span>${escHtml(String(e.heightCm))} cm · ${escHtml(String(e.weightKg))} kg</span>
+            <button onclick="startEditGrowth('${escAttr(e.id)}')" class="text-gray-300 hover:text-gray-500">✏</button>
+          </div>`;
+      }).join('');
+
+  const hasEnough = growthData.length >= 2;
+  document.getElementById('growth-placeholder').classList.toggle('hidden', hasEnough);
+  document.getElementById('growth-charts').classList.toggle('hidden', !hasEnough);
+
+  if (hasEnough) initGrowthCharts();
+}
+
+async function addGrowthEntry() {
+  const date     = document.getElementById('gr-date')?.value;
+  const heightCm = parseFloat(document.getElementById('gr-height')?.value);
+  const weightKg = parseFloat(document.getElementById('gr-weight')?.value);
+  if (!date || isNaN(heightCm) || isNaN(weightKg)) return;
+  await fetch('/api/growth', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ date, heightCm, weightKg }),
+  });
+  try {
+    growthData = await fetch('/api/growth').then(r => r.json());
+  } catch (e) { return; }
+  document.getElementById('gr-height').value = '';
+  document.getElementById('gr-weight').value = '';
+  renderGrowthSection();
+}
+
+function startEditGrowth(id) {
+  const entry = growthData.find(e => e.id === id);
+  if (!entry) return;
+  document.getElementById(`gentry-${id}`).outerHTML = `
+    <div id="gentry-${escAttr(id)}" class="flex items-center gap-2 py-1 border-b border-gray-50">
+      <input type="date" id="ged-date-${escAttr(id)}" value="${escAttr(entry.date)}"
+        class="text-xs border border-gray-100 rounded px-1 py-0.5 bg-gray-50" style="width:110px">
+      <input type="number" id="ged-h-${escAttr(id)}" value="${escAttr(String(entry.heightCm))}" step="0.1"
+        class="text-xs border border-gray-100 rounded px-1 py-0.5 bg-gray-50 w-14" placeholder="cm">
+      <input type="number" id="ged-w-${escAttr(id)}" value="${escAttr(String(entry.weightKg))}" step="0.01"
+        class="text-xs border border-gray-100 rounded px-1 py-0.5 bg-gray-50 w-14" placeholder="kg">
+      <button onclick="saveEditGrowth('${escAttr(id)}')" class="text-xs text-green-600 font-medium">Save</button>
+    </div>`;
+}
+
+async function saveEditGrowth(id) {
+  const date     = document.getElementById(`ged-date-${id}`)?.value;
+  const heightCm = parseFloat(document.getElementById(`ged-h-${id}`)?.value);
+  const weightKg = parseFloat(document.getElementById(`ged-w-${id}`)?.value);
+  if (!date || isNaN(heightCm) || isNaN(weightKg)) return;
+  await fetch(`/api/growth/${id}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ date, heightCm, weightKg }),
+  });
+  try {
+    growthData = await fetch('/api/growth').then(r => r.json());
+  } catch (e) { return; }
+  renderGrowthSection();
+}
+
+function initGrowthCharts() {
+  const dob = new Date(window._babyDob || '2025-11-11');
+
+  function ageMonths(dateStr) {
+    const d = new Date(dateStr);
+    return (d - dob) / (30.4375 * 24 * 3600 * 1000);
+  }
+
+  const babyHeightPts = growthData.map(e => ({ x: ageMonths(e.date), y: e.heightCm }));
+  const babyWeightPts = growthData.map(e => ({ x: ageMonths(e.date), y: e.weightKg }));
+
+  const whoMonths = growthCurves.height.months;
+
+  function whoDataset(pctKey, metric) {
+    return growthCurves[metric][pctKey].map((v, i) => ({ x: whoMonths[i], y: v }));
+  }
+
+  const sharedOptions = (yLabel) => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false }, tooltip: { mode: 'index' } },
+    scales: {
+      x: {
+        type: 'linear',
+        title: { display: true, text: 'Age (months)', font: { size: 10 } },
+        ticks: { font: { size: 9 } },
+        min: 0, max: 24,
+      },
+      y: {
+        title: { display: true, text: yLabel, font: { size: 10 } },
+        ticks: { font: { size: 9 } },
+      },
+    },
+  });
+
+  function bandDatasets(metric, babyPts, babyColor) {
+    return [
+      { data: whoDataset('p3',  metric), fill: false,  borderWidth: 0.8, borderColor: '#e2e8f0', borderDash: [4,3], pointRadius: 0 },
+      { data: whoDataset('p97', metric), fill: '-1',   backgroundColor: 'rgba(226,232,240,0.25)', borderWidth: 0.8, borderColor: '#e2e8f0', borderDash: [4,3], pointRadius: 0 },
+      { data: whoDataset('p15', metric), fill: false,  borderWidth: 0,   pointRadius: 0 },
+      { data: whoDataset('p85', metric), fill: '-1',   backgroundColor: 'rgba(203,213,225,0.3)',  borderWidth: 0, pointRadius: 0 },
+      { data: whoDataset('p50', metric), fill: false,  borderWidth: 1.2, borderColor: 'rgba(148,163,184,0.5)', borderDash: [6,3], pointRadius: 0 },
+      { data: babyPts, fill: false, borderColor: babyColor, backgroundColor: babyColor, borderWidth: 2.5, tension: 0.3, pointRadius: 4, pointBackgroundColor: babyColor },
+    ];
+  }
+
+  if (growthHeightChart) { growthHeightChart.destroy(); growthHeightChart = null; }
+  if (growthWeightChart) { growthWeightChart.destroy(); growthWeightChart = null; }
+
+  growthHeightChart = new Chart(document.getElementById('chart-height'), {
+    type: 'line',
+    data: { datasets: bandDatasets('height', babyHeightPts, '#6ca98f') },
+    options: sharedOptions('Height (cm)'),
+  });
+
+  growthWeightChart = new Chart(document.getElementById('chart-weight'), {
+    type: 'line',
+    data: { datasets: bandDatasets('weight', babyWeightPts, '#f97316') },
+    options: sharedOptions('Weight (kg)'),
+  });
 }
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
