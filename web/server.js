@@ -1303,6 +1303,7 @@ app.patch('/api/growth/:id', (req, res) => {
 app.delete('/api/growth/:id', (req, res) => {
   const data = loadGrowth();
   const updated = data.filter(e => e.id !== req.params.id);
+  if (updated.length === data.length) return res.status(404).json({ error: 'not found' });
   saveGrowth(updated);
   res.json({ ok: true });
 });
