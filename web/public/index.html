@@ -2123,46 +2123,8 @@ async function confirmSaveMilestone() {
 // ── PROGRESS TAB ──────────────────────────────────────────────────────────────
 async function loadProgress() {
   tabLoaded.progress = true;
-  const prog = await fetch('/api/progress').then(r=>r.json());
-  renderProgress(prog);
-}
-
-function renderProgress(prog) {
-  document.getElementById('prog-days').textContent  = prog.daysSinceSolids;
-  document.getElementById('prog-foods').textContent = prog.foodCount;
-  document.getElementById('prog-ms').textContent    = prog.milestoneCount;
-
-  // Reactions chart
-  const total = Object.values(prog.reactions).reduce((a,b)=>a+b, 0) || 1;
-  const rxColors = { Loved:'#FACC15', Liked:'#4ADE80', Neutral:'#94A3B8', Disliked:'#F87171' };
-  const rxEmoji  = { Loved:'😍', Liked:'😊', Neutral:'😐', Disliked:'😖' };
-  document.getElementById('reactions-chart').innerHTML = Object.entries(prog.reactions)
-    .map(([k, v]) => `
-    <div class="flex items-center gap-2">
-      <div class="text-base w-7">${rxEmoji[k]}</div>
-      <div class="text-xs font-medium w-14 text-gray-600">${k}</div>
-      <div class="flex-1 prog-bar">
-        <div class="prog-fill" style="width:${Math.round(v/total*100)}%;background:${rxColors[k]}"></div>
-      </div>
-      <div class="text-xs text-gray-400 w-6 text-right">${v}</div>
-    </div>`).join('');
-
-  // Foods tried
-  const foodsEl = document.getElementById('foods-list');
-  foodsEl.innerHTML = prog.foods.length === 0
-    ? '<span class="text-xs text-gray-300">No foods logged yet.</span>'
-    : prog.foods.map(f => `<span class="inline-block bg-orange-50 text-orange-700 text-xs font-medium px-2.5 py-1 rounded-full">${f.name}</span>`).join('');
-
-  // Milestone breakdown
-  const achieveds = achievementsData.length ? achievementsData : [];
-  const cats = {};
-  achieveds.forEach(a => { cats[a.category] = (cats[a.category]||0)+1; });
-  const msEl = document.getElementById('ms-progress-list');
-  msEl.innerHTML = Object.entries(cats).map(([cat, count]) => `
-    <div class="flex items-center justify-between">
-      <span class="text-sm text-gray-600">${cat}</span>
-      <span class="font-bold text-sm" style="color:var(--sage-d)">${count}</span>
-    </div>`).join('') || '<div class="text-xs text-gray-300">No milestones logged yet.</div>';
+  // Sections rendered by renderAppointments, renderGrowthSection, renderFoodsSection
+  // Full implementation in Task 5
 }
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
