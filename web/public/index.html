@@ -2220,54 +2220,98 @@ async function loadProgress() {
 
 function renderAppointments() {
   const today = new Date().toISOString().split('T')[0];
-  const upcoming = appointmentsData.find(a => a.date >= today);
+  const upcoming = appointmentsData.filter(a => a.date >= today);
   const past     = appointmentsData.filter(a => a.date < today).reverse();
+  const all      = [...upcoming, ...past];
 
-  document.getElementById('appt-next').innerHTML = renderNextApptCard(upcoming);
-  document.getElementById('appt-past').innerHTML = past.length === 0 ? '' :
-    past.map(a => renderPastApptCard(a)).join('');
+  // Auto-expand the nearest upcoming appointment on first render
+  if (!expandedApptId && upcoming.length > 0) expandedApptId = upcoming[0].id;
+
+  document.getElementById('appt-next').innerHTML = `
+    <div class="flex gap-2 mb-3">
+      <input type="date" id="new-appt-date"
+        class="flex-1 bg-white rounded-lg px-3 py-2 text-sm border border-gray-200" style="min-width:0">
+      <button onclick="createAppointment()"
+        class="text-xs font-semibold px-3 py-2 rounded-lg text-white whitespace-nowrap" style="background:var(--peach)">
+        + Add appointment
+      </button>
+    </div>
+    ${all.length === 0
+      ? '<div class="text-xs text-gray-300 text-center py-2">No appointments yet — add one above</div>'
+      : all.map(a => renderApptCard(a, today)).join('')}`;
+  document.getElementById('appt-past').innerHTML = '';
 }
 
-function renderNextApptCard(appt) {
-  if (!appt) {
+function renderApptCard(appt, today) {
+  const isUpcoming = appt.date >= today;
+  const isOpen     = expandedApptId === appt.id;
+  const d = new Date(appt.date).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' });
+  const qCount = appt.questions.length;
+  const stats = [
+    qCount ? `${qCount} q` : 'no questions',
+    appt.weight ? `${appt.weight} kg` : null,
+    appt.height ? `${appt.height} cm` : null,
+  ].filter(Boolean).join(' · ');
+
+  const headerBg = isUpcoming ? 'background:#fff8f0;border:1.5px solid #fed7aa' : 'background:#f9fafb';
+
+  if (!isOpen) {
     return `
-      <div style="background:#f9fafb;border-radius:10px;padding:12px">
-        <div class="text-xs text-gray-500 font-semibold mb-1">Add next appointment</div>
-        <div class="text-xs text-gray-400 mb-2">Pick a date to start tracking questions for your doctor visit</div>
-        <div class="flex gap-2">
-          <input type="date" id="new-appt-date" class="flex-1 bg-white rounded-lg px-3 py-2 text-sm border border-gray-200"
-            style="min-width:0">
-          <button onclick="createAppointment()" class="text-xs font-semibold px-3 py-2 rounded-lg text-white" style="background:var(--peach)">
-            + Add
-          </button>
+      <div onclick="toggleAppt('${escAttr(appt.id)}')" class="cursor-pointer mb-2"
+        style="${headerBg};border-radius:10px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center">
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-semibold text-gray-700">${d}</span>
+          ${isUpcoming ? '<span class="text-xs font-medium" style="color:var(--peach)">upcoming</span>' : ''}
         </div>
+        <span class="text-xs text-gray-400">${stats} ›</span>
       </div>`;
   }
 
   const unanswered = appt.questions.filter(q => !q.answered);
   const answered   = appt.questions.filter(q => q.answered);
+  const needsMeasurements = !isUpcoming && appt.height == null && appt.weight == null;
 
   return `
-    <div style="background:#fff8f0;border:1.5px solid #fed7aa;border-radius:12px;padding:12px">
-      <div class="flex items-center gap-2 mb-3">
-        <span class="text-xs font-bold text-orange-600">Next visit</span>
-        <input type="date" id="appt-date-${escAttr(appt.id)}" value="${escAttr(appt.date)}"
-          onchange="updateApptDate('${escAttr(appt.id)}')"
-          class="text-sm font-semibold text-gray-700 border-none bg-transparent cursor-pointer"
-          style="outline:none">
+    <div class="mb-2" style="${headerBg};border-radius:10px;overflow:hidden">
+      <div onclick="toggleAppt('${escAttr(appt.id)}')" class="cursor-pointer"
+        style="padding:10px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(0,0,0,0.06)">
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-semibold text-gray-700">${d}</span>
+          ${isUpcoming ? '<span class="text-xs font-medium" style="color:var(--peach)">upcoming</span>' : ''}
+        </div>
+        <div class="flex items-center gap-2" onclick="event.stopPropagation()">
+          <input type="date" value="${escAttr(appt.date)}"
+            onchange="updateApptDate('${escAttr(appt.id)}', this.value)"
+            class="text-xs border border-gray-200 rounded px-1 py-0.5 bg-white" style="width:115px">
+          <span class="text-xs text-gray-400 cursor-pointer" onclick="event.stopPropagation();toggleAppt('${escAttr(appt.id)}')">‹</span>
+        </div>
       </div>
-      <div class="text-xs font-semibold text-gray-500 mb-2">Questions for the doctor</div>
-      ${unanswered.map(q => renderQuestion(appt.id, q)).join('')}
-      ${answered.length ? `<div class="mt-2 text-xs text-gray-400 font-medium">Answered</div>${answered.map(q => renderQuestion(appt.id, q)).join('')}` : ''}
-      <div class="flex gap-2 mt-3">
-        <input type="text" id="new-q-${escAttr(appt.id)}" placeholder="Add a question…"
-          class="flex-1 bg-white rounded-lg px-3 py-2 text-xs border border-gray-100"
-          style="min-width:0"
-          onkeydown="if(event.key==='Enter')addQuestion('${escAttr(appt.id)}')">
-        <button onclick="addQuestion('${escAttr(appt.id)}')"
-          class="text-xs font-semibold px-3 py-2 rounded-lg text-white" style="background:var(--sage)">
-          + Add
-        </button>
+      <div style="padding:10px 12px">
+        ${needsMeasurements ? `
+          <div class="text-xs text-gray-400 mb-2">Add measurements (height &amp; weight)</div>
+          <div class="flex gap-2 mb-3">
+            <input type="number" id="ph-${escAttr(appt.id)}" placeholder="Height cm" step="0.1"
+              class="flex-1 bg-white rounded-lg px-2 py-1.5 text-xs border border-gray-100">
+            <input type="number" id="pw-${escAttr(appt.id)}" placeholder="Weight kg" step="0.01"
+              class="flex-1 bg-white rounded-lg px-2 py-1.5 text-xs border border-gray-100">
+            <button onclick="saveMeasurements('${escAttr(appt.id)}')"
+              class="text-xs font-semibold px-2 py-1.5 rounded-lg text-white" style="background:var(--peach)">Save</button>
+          </div>` : (!isUpcoming && (appt.height || appt.weight)) ? `
+          <div class="text-xs text-gray-500 mb-3">${escHtml(String(appt.height))} cm · ${escHtml(String(appt.weight))} kg</div>` : ''}
+        <div class="text-xs font-semibold text-gray-500 mb-2">Questions for the doctor</div>
+        ${unanswered.map(q => renderQuestion(appt.id, q)).join('')}
+        ${answered.length ? `<div class="mt-2 text-xs text-gray-400 font-medium">Answered</div>${answered.map(q => renderQuestion(appt.id, q)).join('')}` : ''}
+        ${appt.questions.length === 0 ? '<div class="text-xs text-gray-300 mb-2">No questions yet</div>' : ''}
+        <div class="flex gap-2 mt-3">
+          <input type="text" id="new-q-${escAttr(appt.id)}" placeholder="Add a question…"
+            class="flex-1 bg-white rounded-lg px-3 py-2 text-xs border border-gray-100"
+            style="min-width:0"
+            onkeydown="if(event.key==='Enter')addQuestion('${escAttr(appt.id)}')">
+          <button onclick="addQuestion('${escAttr(appt.id)}')"
+            class="text-xs font-semibold px-3 py-2 rounded-lg text-white" style="background:var(--sage)">
+            + Add
+          </button>
+        </div>
       </div>
     </div>`;
 }
@@ -2301,55 +2345,6 @@ function renderQuestion(apptId, q) {
     </div>`;
 }
 
-function renderPastApptCard(appt) {
-  const isOpen = expandedApptId === appt.id;
-  const d = new Date(appt.date).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' });
-  const qCount = appt.questions.length;
-  const stats = [
-    qCount ? `${qCount} question${qCount!==1?'s':''}` : null,
-    appt.weight ? `${appt.weight} kg` : null,
-    appt.height ? `${appt.height} cm` : null,
-  ].filter(Boolean).join(' · ');
-
-  if (!isOpen) {
-    return `
-      <div class="cursor-pointer" onclick="toggleAppt('${escAttr(appt.id)}')"
-        style="border-radius:10px;padding:10px 12px;background:#f9fafb;display:flex;justify-content:space-between;align-items:center">
-        <span class="text-sm font-semibold text-gray-700">${d}</span>
-        <span class="text-xs text-gray-400">${stats || 'No data'} ›</span>
-      </div>`;
-  }
-
-  const needsMeasurements = appt.height == null && appt.weight == null;
-  return `
-    <div style="border-radius:10px;background:#f9fafb;overflow:hidden">
-      <div class="cursor-pointer" onclick="toggleAppt('${escAttr(appt.id)}')"
-        style="padding:10px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #f3f4f6">
-        <span class="text-sm font-semibold text-gray-700">${d}</span>
-        <span class="text-xs text-gray-400">‹ collapse</span>
-      </div>
-      <div style="padding:10px 12px">
-        ${needsMeasurements ? `
-          <div class="text-xs text-gray-400 mb-2">Add measurements</div>
-          <div class="flex gap-2 mb-3">
-            <input type="number" id="ph-${escAttr(appt.id)}" placeholder="Height cm" step="0.1"
-              class="flex-1 bg-white rounded-lg px-2 py-1.5 text-xs border border-gray-100">
-            <input type="number" id="pw-${escAttr(appt.id)}" placeholder="Weight kg" step="0.01"
-              class="flex-1 bg-white rounded-lg px-2 py-1.5 text-xs border border-gray-100">
-            <button onclick="saveMeasurements('${escAttr(appt.id)}')"
-              class="text-xs font-semibold px-2 py-1.5 rounded-lg text-white" style="background:var(--peach)">Save</button>
-          </div>` : `
-          <div class="text-xs text-gray-500 mb-3">${escHtml(String(appt.height))} cm · ${escHtml(String(appt.weight))} kg</div>`}
-        ${appt.questions.length === 0
-          ? '<div class="text-xs text-gray-300">No questions recorded</div>'
-          : appt.questions.map(q => `
-            <div style="padding:6px 8px;background:#fff;border-radius:6px;margin-bottom:4px">
-              <div class="text-xs text-gray-600">${escHtml(q.text)}</div>
-              ${q.answered && q.answer ? `<div class="text-xs text-green-600 mt-1">"${escHtml(q.answer)}"</div>` : ''}
-            </div>`).join('')}
-      </div>
-    </div>`;
-}
 
 async function reloadAppointments() {
   try {
@@ -2359,23 +2354,26 @@ async function reloadAppointments() {
 }
 
 async function createAppointment() {
-  const date = document.getElementById('new-appt-date')?.value;
+  const input = document.getElementById('new-appt-date');
+  const date  = input?.value;
   if (!date) return;
   const resp = await fetch('/api/appointments', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ date }),
   }).then(r => r.json());
   if (resp.ok) {
+    expandedApptId = resp.appointment.id; // auto-expand the new appointment
+    if (input) input.value = '';
     await reloadAppointments();
   }
 }
 
-async function updateApptDate(apptId) {
-  const date = document.getElementById(`appt-date-${apptId}`)?.value;
-  if (!date) return;
+async function updateApptDate(apptId, dateValue) {
+  if (!dateValue) return;
+  expandedApptId = apptId; // keep this appointment expanded after re-render
   await fetch(`/api/appointments/${apptId}`, {
     method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ date }),
+    body: JSON.stringify({ date: dateValue }),
   });
   await reloadAppointments();
 }
