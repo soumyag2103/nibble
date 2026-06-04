@@ -1259,6 +1259,40 @@ app.get('/api/progress', (req, res) => {
   });
 });
 
+// ── Foods summary ─────────────────────────────────────────────────────────────
+
+app.get('/api/foods-summary', (req, res) => {
+  const profile = loadProfile();
+  const slotIds = profile.slots.map(s => s.id);
+  const map = {}; // lowercase food name → { name, reactions: {Loved,Liked,Neutral,Disliked} }
+
+  // Scan all daily log files
+  let files = [];
+  try { files = fs.readdirSync(LOGS_DIR).filter(f => f.endsWith('.json')); } catch {}
+
+  for (const file of files) {
+    const log = rj(path.join(LOGS_DIR, file));
+    if (!log) continue;
+    for (const slotId of slotIds) {
+      const meal = log.meals?.[slotId];
+      if (!meal?.food) continue;
+      const key  = meal.food.toLowerCase().trim();
+      if (!map[key]) map[key] = { name: meal.food.trim(), reactions: { Loved:0, Liked:0, Neutral:0, Disliked:0 } };
+      const r = meal.reaction;
+      if (r && map[key].reactions[r] !== undefined) map[key].reactions[r]++;
+    }
+  }
+
+  const foods = Object.values(map).map(f => ({
+    name: f.name,
+    totalEntries: Object.values(f.reactions).reduce((a, b) => a + b, 0),
+    reactions: f.reactions,
+    rejected: f.reactions.Disliked > 0,
+  }));
+
+  res.json(foods);
+});
+
 // ── Growth tracking ───────────────────────────────────────────────────────────
 
 app.get('/api/growth-curves', (req, res) => {
