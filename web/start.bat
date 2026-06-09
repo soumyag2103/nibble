@@ -1,7 +1,7 @@
 @echo off
-title Saahiti Web Dashboard
+title Nibble Web App
 cd /d "%~dp0"
-echo Starting Saahiti web dashboard...
+echo Starting Nibble web app...
 echo Open http://localhost:3001 in your browser
 node server.js
 pause
