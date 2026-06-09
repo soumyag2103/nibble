@@ -1265,15 +1265,16 @@ app.get('/api/foods-summary', (req, res) => {
   const profile = loadProfile();
   const slotIds = profile.slots.map(s => s.id);
   const map = {}; // lowercase food name → { name, reactions }
+  const emptyReactions = () => ({ Loved:0, Liked:0, Neutral:0, Disliked:0 });
 
   // ── Source 1: FOODS-TRIED.md — base set of all introduced foods ──
   const foodsMd = rf(path.join(GORDON_DIR, 'FOODS-TRIED.md'));
   for (const line of foodsMd.split('\n')) {
-    if (!line.startsWith('|') || line.startsWith('| Food') || line.startsWith('|---')) continue;
+    if (!line.startsWith('|') || line.includes('Food') || line.includes('---')) continue;
     const cols = line.split('|').map(c => c.trim()).filter(Boolean);
     if (cols.length < 1 || !cols[0]) continue;
     const key = cols[0].toLowerCase();
-    if (!map[key]) map[key] = { name: cols[0], reactions: { Loved:0, Liked:0, Neutral:0, Disliked:0 } };
+    if (!map[key]) map[key] = { name: cols[0], reactions: emptyReactions() };
   }
 
   // ── Source 2: Daily logs — layer reactions on top ──
@@ -1286,7 +1287,7 @@ app.get('/api/foods-summary', (req, res) => {
       const meal = log.meals?.[slotId];
       if (!meal?.food) continue;
       const key = meal.food.toLowerCase().trim();
-      if (!map[key]) map[key] = { name: meal.food.trim(), reactions: { Loved:0, Liked:0, Neutral:0, Disliked:0 } };
+      if (!map[key]) map[key] = { name: meal.food.trim(), reactions: emptyReactions() };
       const r = meal.reaction;
       if (r && map[key].reactions[r] !== undefined) map[key].reactions[r]++;
     }
