@@ -906,111 +906,6 @@ function writeFoodsTriedFromOnboarding(profile, foodsIntroduced, activeIntros) {
   wf(path.join(GORDON_DIR, 'FOODS-TRIED.md'), md);
 }
 
-const SCHEDULED_PATH = path.join(GORDON_DIR, 'SCHEDULED-MEALS.json');
-
-// POST /api/schedule-meal — save a chosen variation for a future date
-app.post('/api/schedule-meal', (req, res) => {
-  const { date, slot, food, recipe, dayNumber, daysRemaining } = req.body;
-  const data = rj(SCHEDULED_PATH) || {};
-  if (!data[date]) data[date] = {};
-  data[date][slot] = { food, recipe: recipe || '', source: 'scheduled', dayNumber, daysRemaining };
-  wj(SCHEDULED_PATH, data);
-  res.json({ success: true });
-});
-
-// GET /api/today-suggestion — pre-populated menu for Today tab
-// Priority: scheduled > week plan > active 5-day intro > roadmap > Gordon fallback
-app.get('/api/today-suggestion', async (req, res) => {
-  const today      = tod();
-  const profile    = loadProfile();
-  const active     = getActive5DayIntros(profile);
-  const sched      = (rj(SCHEDULED_PATH) || {})[today] || {};
-  const allSlotIds = profile.slots.map(s => s.id);
-
-  // Load cached week plan for today's date
-  const weekPlans   = rj(WEEK_PLANS_PATH) || {};
-  const ageNow      = getBabyAge(profile);
-  const planMonth   = Math.max(6, Math.min(12, ageNow.months));
-  const planWeek    = Math.min(4, Math.floor(ageNow.days / 7) + 1);
-  const weekPlan    = weekPlans[`${planMonth}-${planWeek}`];
-  const todayName   = new Date().toLocaleDateString('en-US', { weekday: 'long' });
-  const todayEntry  = weekPlan?.days?.find(d => d.day.toLowerCase() === todayName.toLowerCase());
-
-  // Week plan checked first for all unscheduled slots — it IS the source of truth
-  const weekPlanFoods = {};
-  const slotsAfterPlan = [];
-  for (const slot of allSlotIds.filter(s => !sched[s])) {
-    const food = todayEntry?.meals?.[slot]?.food;
-    if (food && food !== '...') weekPlanFoods[slot] = food;
-    else slotsAfterPlan.push(slot);
-  }
-
-  const roadmapFoods = {};
-  const slotsNeedingGordon = [];
-
-  // Roadmap fallback for slots not covered by week plan
-  for (const slot of slotsAfterPlan.filter(s => !active[s])) {
-    const food = getRoadmapFood(profile, slot);
-    if (food) {
-      roadmapFoods[slot] = food;
-    } else {
-      slotsNeedingGordon.push(slot);
-    }
-  }
-
-  // Gordon fallback only for slots with no roadmap entry this week
-  let gordonFoods = {};
-  if (slotsNeedingGordon.length > 0) {
-    const lines = slotsNeedingGordon.map(s => `${s.toUpperCase()}: [food name]`).join('\n');
-    const prompt = `${buildGordonPrompt()}
-
-TODAY'S TASK: Suggest one food for each of these slots only: ${slotsNeedingGordon.map(s=>s.toUpperCase()).join(', ')}.
-These slots have no active 5-day introduction and no roadmap entry this week. Use RECENT-MEALS and PREFERENCES — no repeats, no dislikes.
-
-Return ONLY these lines, nothing else:
-${lines}`;
-
-    try {
-      const result = await groq.chat.completions.create({
-        model: 'llama-3.3-70b-versatile',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 80, temperature: 0.2,
-      });
-      const slotPattern = new RegExp(`^(${slotsNeedingGordon.map(s => s.toUpperCase().replace(/_/g, '[_ ]?')).join('|')}):\\s*(.+)`, 'i');
-      for (const line of result.choices[0].message.content.split('\n')) {
-        const m = line.match(slotPattern);
-        if (m) {
-          const key     = m[1].toLowerCase().replace(/\s/g, '_');
-          const matched = slotsNeedingGordon.find(s => s === key || s.toUpperCase() === m[1].toUpperCase());
-          if (matched) gordonFoods[matched] = m[2].trim().replace(/^\[|\]$/g,'');
-        }
-      }
-    } catch(e) { console.error('Gordon fallback suggestion error:', e.message); }
-  }
-
-  const suggestion = {};
-  for (const slot of allSlotIds) {
-    if (sched[slot]) {
-      suggestion[slot] = sched[slot];
-    } else if (weekPlanFoods[slot]) {
-      // Week plan = source of truth; carry 5-day metadata if applicable so UI still shows day counter
-      const a = active[slot];
-      suggestion[slot] = {
-        food: weekPlanFoods[slot],
-        recipe: todayEntry?.meals?.[slot]?.recipe || '',
-        source: 'weekplan',
-        dayNumber: a?.dayNumber || null, daysRemaining: a?.daysRemaining ?? 0,
-      };
-    } else if (active[slot]) {
-      suggestion[slot] = { food: active[slot].food, source: '5day', dayNumber: active[slot].dayNumber, daysRemaining: active[slot].daysRemaining };
-    } else if (roadmapFoods[slot]) {
-      suggestion[slot] = { food: roadmapFoods[slot], source: 'roadmap', dayNumber: null, daysRemaining: 0 };
-    } else {
-      suggestion[slot] = { food: gordonFoods[slot] || '', source: 'gordon', dayNumber: null, daysRemaining: 0 };
-    }
-  }
-  res.json({ suggestion });
-});
 
 // POST /api/dislike-variations — day-by-day variation schedule for remaining 5-day window
 app.post('/api/dislike-variations', async (req, res) => {
@@ -1525,34 +1420,6 @@ ${dayTemplate}
   return plan;
 }
 
-// Overlay SCHEDULED-MEALS on top of a week plan (mutates a deep-cloned copy)
-function overlayScheduled(plan, month, week, profile) {
-  const scheduled = rj(SCHEDULED_PATH) || {};
-  const dob = new Date(profile.dob + 'T00:00:00');
-  const anchor = new Date(dob);
-  anchor.setMonth(anchor.getMonth() + month);
-  anchor.setDate(anchor.getDate() + (week - 1) * 7);
-  const dow = anchor.getDay();
-  const monday = new Date(anchor);
-  monday.setDate(anchor.getDate() - (dow === 0 ? 6 : dow - 1));
-
-  const result = JSON.parse(JSON.stringify(plan)); // deep clone
-  const localDate = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  result.days.forEach((day, i) => {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
-    const dateStr = localDate(d);
-    const schedDay = scheduled[dateStr];
-    if (!schedDay) return;
-    for (const [slot, meal] of Object.entries(schedDay)) {
-      if (!result.days[i].meals[slot]) result.days[i].meals[slot] = {};
-      result.days[i].meals[slot].food     = meal.food;
-      result.days[i].meals[slot].recipe   = meal.recipe || '';
-      result.days[i].meals[slot].scheduled = true;
-    }
-  });
-  return result;
-}
 
 // POST /api/week-plan — serve cached or generate
 app.post('/api/week-plan', async (req, res) => {
@@ -1563,7 +1430,7 @@ app.post('/api/week-plan', async (req, res) => {
     try { plan = await generateWeekPlan(month, week, profile); }
     catch(e) { return res.status(500).json({ error: e.message }); }
   }
-  res.json(overlayScheduled(plan, month, week, profile));
+  res.json(plan);
 });
 
 // GET /api/week-plan/:month/:week — return cached plan or generate on demand
@@ -1576,7 +1443,28 @@ app.get('/api/week-plan/:month/:week', async (req, res) => {
     try { plan = await generateWeekPlan(month, week, profile); }
     catch(e) { return res.status(500).json({ error: e.message }); }
   }
-  res.json(overlayScheduled(plan, month, week, profile));
+  res.json(plan);
+});
+
+// GET /api/ensure-week-plan — return current week's plan, generating if missing
+app.get('/api/ensure-week-plan', async (req, res) => {
+  const profile = loadProfile();
+  const age     = getBabyAge(profile);
+  const month   = Math.max(6, Math.min(12, age.months));
+  const week    = Math.min(4, Math.floor(age.days / 7) + 1);
+  const plans   = rj(WEEK_PLANS_PATH) || {};
+  const key     = `${month}-${week}`;
+
+  if (plans[key]) {
+    return res.json({ generated: false, plan: plans[key], month, week });
+  }
+
+  try {
+    const plan = await generateWeekPlan(month, week, profile);
+    res.json({ generated: true, plan, month, week });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ── Profile & Settings ────────────────────────────────────────────────────────
