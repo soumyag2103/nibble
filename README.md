@@ -77,6 +77,66 @@ Each agent has a `SOUL.md` (system prompt) in `agents/<name>/`.
 
 ---
 
+## Setup
+
+### Prerequisites
+
+- Node.js 18+
+- [Groq](https://console.groq.com) account — free tier is enough, get an API key
+- *(Bot only)* Telegram — create a bot via [@BotFather](https://t.me/botfather), copy the token
+
+### 1. Clone
+
+```bash
+git clone https://github.com/soumyag2103/nibble.git
+cd nibble
+```
+
+### 2. Create `bot/.env`
+
+```bash
+GROQ_API_KEY=your_groq_api_key_here
+TELEGRAM_TOKEN=your_telegram_bot_token_here   # only needed for the Telegram bot
+```
+
+The web app reads this same file — `server.js` loads `../bot/.env` at startup.
+
+### 3. Install dependencies
+
+```bash
+# Web app (required)
+cd web && npm install
+
+# Telegram bot (optional)
+cd ../bot && npm install
+```
+
+### 4. Run the web app
+
+```bash
+cd web && node server.js
+# → Open http://localhost:3001
+```
+
+First visit shows onboarding. Enter your baby's name, date of birth, dietary preference, and when solids started. The app generates the 6–12 month food roadmap and the first week's meal plan automatically (~3s Groq call, cached after that).
+
+### 5. *(Optional)* Run the Telegram bot
+
+```bash
+cd bot && node bot.js
+```
+
+Message your bot on Telegram. Both phases read and write the same `agents/` files — they stay in sync automatically.
+
+### What auto-generates on first run
+
+| File | When | Time |
+|------|------|------|
+| `FOOD-ROADMAP.json` | First Plans tab load | ~3s |
+| `WEEK-PLANS.json` key | Every new week, on app init | ~2s |
+
+---
+
 ## Phase 1: Telegram Bot (`bot/`)
 
 WhatsApp-style chat interface for real-time logging from the phone.
