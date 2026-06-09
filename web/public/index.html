@@ -413,6 +413,8 @@
 let appProfile    = null;
 let todayLog      = { meals: {} };
 let todaySuggest  = {};
+let currentPlanMonth = null;
+let currentPlanWeek  = null;
 let slotOverrides = {};
 let knownFoods    = [];
 let chatHistory   = [];
@@ -520,19 +522,31 @@ async function initWithProfile(profile) {
 
   window._babyDob = profile.dob;
 
-  const [status, log, foods, suggestResp] = await Promise.all([
+  const [status, log, foods, planResp] = await Promise.all([
     fetch('/api/status').then(r=>r.json()),
     fetch('/api/today-log').then(r=>r.json()),
     fetch('/api/foods').then(r=>r.json()),
-    fetch('/api/today-suggestion').then(r=>r.json()).catch(()=>({ suggestion:{} })),
+    fetch('/api/ensure-week-plan').then(r=>r.json()).catch(()=>({ plan: null, month: null, week: null })),
   ]);
 
   document.getElementById('header-age').textContent = `${status.age.label} old`;
   document.getElementById('header-date').textContent = status.formatted;
 
-  todayLog     = log;
-  knownFoods   = foods;
-  todaySuggest = suggestResp.suggestion || todaySuggest;
+  todayLog          = log;
+  knownFoods        = foods;
+  currentPlanMonth  = planResp.month;
+  currentPlanWeek   = planResp.week;
+
+  todaySuggest = {};
+  if (planResp.plan?.days) {
+    const todayName  = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+    const todayEntry = planResp.plan.days.find(d => d.day.toLowerCase() === todayName.toLowerCase());
+    if (todayEntry) {
+      for (const [slotId, meal] of Object.entries(todayEntry.meals || {})) {
+        todaySuggest[slotId] = { food: meal.food, recipe: meal.recipe || '', source: 'weekplan', dayNumber: null, daysRemaining: 0 };
+      }
+    }
+  }
 
   renderMealSlots();
   loadWeekStrip();
@@ -1214,12 +1228,23 @@ async function saveSettings() {
       .catch(() => {});
 
     // Re-fetch today data with new slots
-    const [log, suggestResp] = await Promise.all([
+    const [log, planResp] = await Promise.all([
       fetch('/api/today-log').then(r=>r.json()),
-      fetch('/api/today-suggestion').then(r=>r.json()).catch(()=>({ suggestion:{} })),
+      fetch('/api/ensure-week-plan').then(r=>r.json()).catch(()=>({ plan: null, month: null, week: null })),
     ]);
-    todayLog     = log;
-    todaySuggest = suggestResp.suggestion || todaySuggest;
+    todayLog          = log;
+    currentPlanMonth  = planResp.month;
+    currentPlanWeek   = planResp.week;
+    todaySuggest = {};
+    if (planResp.plan?.days) {
+      const todayName  = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+      const todayEntry = planResp.plan.days.find(d => d.day.toLowerCase() === todayName.toLowerCase());
+      if (todayEntry) {
+        for (const [slotId, meal] of Object.entries(todayEntry.meals || {})) {
+          todaySuggest[slotId] = { food: meal.food, recipe: meal.recipe || '', source: 'weekplan', dayNumber: null, daysRemaining: 0 };
+        }
+      }
+    }
     renderMealSlots();
     loadWeekStrip();
   } catch(e) {
