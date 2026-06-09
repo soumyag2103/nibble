@@ -1490,7 +1490,7 @@ app.patch('/api/week-plan/:month/:week/day/:dayIndex/slot/:slotId', (req, res) =
   if (!plan.days[dayIndex].meals[slotId]) plan.days[dayIndex].meals[slotId] = {};
 
   plan.days[dayIndex].meals[slotId].food   = food;
-  plan.days[dayIndex].meals[slotId].recipe = recipe || '';
+  plan.days[dayIndex].meals[slotId].recipe = recipe ?? plan.days[dayIndex].meals[slotId]?.recipe ?? '';
 
   plans[`${month}-${week}`] = plan;
   wj(WEEK_PLANS_PATH, plans);
