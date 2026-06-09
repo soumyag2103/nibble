@@ -224,5 +224,5 @@ bot.on('message:text', async (ctx) => {
 // ── Start ─────────────────────────────────────────────────────────────────────
 
 bot.start({
-  onStart: () => console.log('✅ Saahiti agents bot running. Waiting for messages...'),
+  onStart: () => console.log('✅ Nibble bot running. Waiting for messages...'),
 });

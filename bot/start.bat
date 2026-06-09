@@ -1,6 +1,6 @@
 @echo off
-title Saahiti Agents Bot
+title Nibble Bot
 cd /d "%~dp0"
-echo Starting Saahiti agents bot...
+echo Starting Nibble bot...
 node bot.js
 pause

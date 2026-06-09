@@ -1657,5 +1657,5 @@ app.put('/api/settings', (req, res) => {
 
 app.listen(3001, () => {
   const p = loadProfile();
-  console.log(`🍼 ${p.name}'s Firsts → http://localhost:3001`);
+  console.log(`🥄 Nibble → http://localhost:3001`);
 });

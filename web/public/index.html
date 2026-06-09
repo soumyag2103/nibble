@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-  <title>Saahiti — Firsts</title>
+  <title>Nibble — Big milestones start with tiny bites.</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
@@ -239,7 +239,7 @@
   <div class="sticky top-0 z-20 bg-white/95 backdrop-blur-md border-b border-orange-100 px-4 py-3">
     <div class="max-w-lg mx-auto flex items-center justify-between">
       <div>
-        <h1 id="header-title" class="text-base font-bold" style="color:var(--peach-d)">🍼 Firsts</h1>
+        <h1 id="header-title" class="text-base font-bold" style="color:var(--peach-d)">🥄 Nibble</h1>
         <p id="header-age" class="text-xs text-gray-400">Loading...</p>
       </div>
       <div class="flex items-center gap-3">
@@ -515,8 +515,8 @@ async function initWithProfile(profile) {
   buildSlotMeta(profile.slots);
 
   // Update static UI with profile name
-  document.getElementById('header-title').textContent = `🍼 ${profile.name}'s Firsts`;
-  document.title = `${profile.name} — Firsts`;
+  document.getElementById('header-title').textContent = `🥄 Nibble`;
+  document.title = `Nibble — ${profile.name}'s tracker`;
 
   window._babyDob = profile.dob;
 
@@ -893,9 +893,9 @@ function renderOnbStep() {
 
   const steps = {
     1: `<div class="flex flex-col items-center text-center pt-8">
-          <div class="text-5xl mb-4">🍼</div>
-          <h2 class="text-2xl font-bold mb-2" style="color:var(--peach-d)">Welcome to Firsts</h2>
-          <p class="text-gray-400 text-sm mb-8">Your baby's personalised growth companion</p>
+          <div class="text-5xl mb-4">🥄</div>
+          <h2 class="text-2xl font-bold mb-2" style="color:var(--peach-d)">Welcome to Nibble</h2>
+          <p class="text-gray-400 text-sm mb-8">Big milestones start with tiny bites.</p>
           <p class="text-sm font-semibold text-gray-600 mb-2 self-start">Baby's name</p>
           <input id="onb-name" type="text" placeholder="e.g. Saahiti" value="${escAttr(onbState.name)}"
             class="w-full bg-white border-2 border-gray-200 rounded-2xl px-4 py-3 text-lg font-semibold text-center focus:border-orange-300"
