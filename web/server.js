@@ -29,7 +29,7 @@ const DEFAULT_PROFILE = {
   ],
 };
 
-function loadProfile() { return rj(PROFILE_PATH) || DEFAULT_PROFILE; }
+function loadProfile() { const p = rj(PROFILE_PATH); return (p?.dob ? p : null) || DEFAULT_PROFILE; }
 function loadAppointments() {
   const data = rj(APPOINTMENTS_PATH) || [];
   return data.sort((a, b) => a.date.localeCompare(b.date));
