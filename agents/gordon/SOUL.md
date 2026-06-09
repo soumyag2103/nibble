@@ -68,3 +68,12 @@ When parent says "Saahiti had X today, [reaction]":
 ## Relationships
 Reads: SAAHITI.md, FOODS-TRIED.md, FOODS-AVOIDED.md, RECENT-MEALS.md
 Writes: FOODS-TRIED.md, RECENT-MEALS.md, memory/
+
+## Week Plan Updates
+
+When a parent asks to swap a food in the week plan, confirm the change warmly, then append:
+
+ACTION_JSON: {"action":"update_week_plan","payload":{"month":<month>,"week":<week>,"dayIndex":<0-6>,"slotId":"<slot_id>","food":"<food>","recipe":"<one sentence recipe>"}}
+
+dayIndex: Monday=0, Tuesday=1, Wednesday=2, Thursday=3, Friday=4, Saturday=5, Sunday=6.
+Only emit if you know which day and slot to update. If unclear, ask first.

@@ -223,13 +223,14 @@ function buildUmaClassifierPrompt(profile) {
 Return ONLY valid JSON, nothing else:
 {"intent":"chat","agent":"gordon","confidence":0.9}
 
-Intent values: "chat" | "log_food" | "log_milestone" | "log_doctor_question"
+Intent values: "chat" | "log_food" | "log_milestone" | "log_doctor_question" | "update_week_plan"
 Agent values: "gordon" | "meredith" | "bailey"
 
 Rules:
 - Food questions, what to feed, reactions, food just eaten/tried → {"intent":"log_food","agent":"gordon"}
 - Developmental milestone just observed (physical/cognitive action) → {"intent":"log_milestone","agent":"meredith"}
 - Health concerns, symptoms, doctor questions, want to ask doctor → {"intent":"log_doctor_question","agent":"bailey"}
+- Parent wants to swap or change a food in the week plan → {"intent":"update_week_plan","agent":"gordon"}
 - General parenting chat, emotional support, anything unclear → {"intent":"chat","agent":"gordon"}
 - If confidence below 0.5, use {"intent":"chat","agent":"gordon"}
 
@@ -250,6 +251,11 @@ ACTION_JSON: {"action":"log_milestone","payload":{"milestone":"<description>","d
     log_doctor_question: `
 After answering, append the question to save:
 ACTION_JSON: {"action":"log_doctor_question","payload":{"question":"<concise question for the doctor>"}}`,
+    update_week_plan: `
+When the parent asks to swap or change a food in the week plan, confirm the swap warmly and append:
+ACTION_JSON: {"action":"update_week_plan","payload":{"month":<month>,"week":<week>,"dayIndex":<0-6 Mon=0>,"slotId":"<slot_id>","food":"<new food name>","recipe":"<one sentence recipe>"}}
+Use the baby's current age to determine month and week. dayIndex: Monday=0, Tuesday=1, Wednesday=2, Thursday=3, Friday=4, Saturday=5, Sunday=6.
+Only emit if the parent clearly specifies which day or slot to change. If unclear, ask which meal to update first.`,
     chat: '',
   };
 
@@ -1465,6 +1471,31 @@ app.get('/api/ensure-week-plan', async (req, res) => {
   } catch(e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// PATCH /api/week-plan/:month/:week/day/:dayIndex/slot/:slotId — edit one cell in place
+app.patch('/api/week-plan/:month/:week/day/:dayIndex/slot/:slotId', (req, res) => {
+  const month    = parseInt(req.params.month);
+  const week     = parseInt(req.params.week);
+  const dayIndex = parseInt(req.params.dayIndex);
+  const slotId   = req.params.slotId;
+  const { food, recipe } = req.body;
+
+  if (!food) return res.status(400).json({ error: 'food required' });
+
+  const plans = rj(WEEK_PLANS_PATH) || {};
+  const plan  = plans[`${month}-${week}`];
+  if (!plan) return res.status(404).json({ error: 'plan not found' });
+  if (!plan.days[dayIndex]) return res.status(404).json({ error: 'day not found' });
+  if (!plan.days[dayIndex].meals[slotId]) plan.days[dayIndex].meals[slotId] = {};
+
+  plan.days[dayIndex].meals[slotId].food   = food;
+  plan.days[dayIndex].meals[slotId].recipe = recipe || '';
+
+  plans[`${month}-${week}`] = plan;
+  wj(WEEK_PLANS_PATH, plans);
+
+  res.json({ ok: true, day: plan.days[dayIndex] });
 });
 
 // ── Profile & Settings ────────────────────────────────────────────────────────
