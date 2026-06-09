@@ -1399,7 +1399,8 @@ function renderActionCard(action, payload) {
   }
 
   if (action === 'update_week_plan') {
-    const { month, week, dayIndex, slotId, food, recipe } = payload || {};
+    const { month, week, dayIndex, slotId, food = 'this meal', recipe } = payload || {};
+    if (dayIndex == null || dayIndex < 0 || dayIndex > 6) return '';
     const dayNames = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
     const dayName  = dayNames[dayIndex] || 'that day';
     return `<div class="action-card" id="${id}">
@@ -1525,6 +1526,10 @@ async function confirmDoctorQuestion(cardId) {
 
 async function confirmWeekPlanUpdate(cardId, month, week, dayIndex, slotId, food, recipe) {
   const card = document.getElementById(cardId);
+  if (month == null || week == null || dayIndex == null || !slotId) {
+    if (card) card.innerHTML = `<div class="text-xs text-red-500 py-2">Invalid update — missing plan details.</div>`;
+    return;
+  }
   if (card) card.innerHTML = `<div class="text-xs text-gray-400 py-2">Updating plan...</div>`;
 
   try {
@@ -1542,6 +1547,8 @@ async function confirmWeekPlanUpdate(cardId, month, week, dayIndex, slotId, food
       todaySuggest[slotId] = { food, recipe: recipe || '', source: 'weekplan', dayNumber: null, daysRemaining: 0 };
       renderMealSlots();
     }
+
+    if (typeof tabLoaded !== 'undefined') tabLoaded.plans = false;
 
     if (card) card.innerHTML = `<div class="text-xs text-green-600 py-2 font-semibold">✓ Week plan updated — ${escHtml(food)} on ${escHtml(dayNames[dayIndex] || 'that day')}</div>`;
   } catch(e) {
