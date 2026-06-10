@@ -505,7 +505,7 @@ function buildSlotMeta(slots) {
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
   const profileResp = await fetch('/api/profile').then(r => r.json());
-  if (!profileResp.name || !profileResp.dob) {
+  if (!profileResp || !profileResp.name || !profileResp.dob) {
     showOnboarding();
     return;
   }
