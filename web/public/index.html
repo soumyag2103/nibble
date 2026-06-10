@@ -834,6 +834,8 @@ async function applyVariantToWeekPlan(btn, slotId, food, recipe) {
     if (!r.ok) throw new Error('Failed');
 
     // Do NOT touch today's suggestion or re-render today's slots
+    // Clear cached plan so Plans tab fetches fresh data on next open
+    delete weekPlanCache[`${tgtMonth}-${tgtWeek}`];
     if (typeof tabLoaded !== 'undefined') tabLoaded.plans = false;
 
     btn.textContent = `✓ Scheduled for ${tomorrowLabel}`;
@@ -1567,6 +1569,7 @@ async function confirmWeekPlanUpdate(cardId, month, week, dayIndex, slotId, food
       renderMealSlots();
     }
 
+    delete weekPlanCache[`${month}-${week}`];
     if (typeof tabLoaded !== 'undefined') tabLoaded.plans = false;
 
     if (card) card.innerHTML = `<div class="text-xs text-green-600 py-2 font-semibold">✓ Week plan updated — ${escHtml(food)} on ${escHtml(dayNames[dayIndex] || 'that day')}</div>`;
