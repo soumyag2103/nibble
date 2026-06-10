@@ -1404,7 +1404,7 @@ async function generateWeekPlan(month, week, profile) {
 
 This is Week ${week} of Month ${month} of introducing solids.
 
-HERO FOODS FOR THIS WEEK (introduce or build on these):
+HERO FOODS FOR THIS WEEK (one per slot — the NEW food being introduced this week):
 ${heroText}
 
 FOODS ALREADY TRIED:
@@ -1415,14 +1415,24 @@ ${preferences}
 
 MEAL SLOTS: ${slotsDesc}
 
+CRITICAL — 5-DAY INTRODUCTION RULE:
+Each hero food MUST appear in its slot for ALL 7 days of the week. Only the preparation and recipe change each day — the food name stays exactly the same. This is mandatory for allergy detection: a new food must be served consistently before the baby is considered tolerant.
+
+Example (if hero food for snack1 is "Mango"):
+  Monday snack1:    food="Mango", recipe="Mash ripe mango, serve plain."
+  Tuesday snack1:   food="Mango", recipe="Mash mango with a pinch of cardamom."
+  Wednesday snack1: food="Mango", recipe="Blend mango with cooked rice for a thicker texture."
+  ... and so on for all 7 days. NEVER switch to a different food mid-week for that slot.
+
+If a slot has NO hero food this week (rotation week), pick ONE previously-tried food the baby liked and use it consistently for all 7 days in that slot.
+
 RULES:
 - Each recipe max 2 sentences. Practical, Indian home kitchen style.
-- Vary the preparation each day — not the same recipe repeated.
-- If a slot has no hero food, use a previously-tried food the baby likes.
+- Vary the PREPARATION each day — not the same recipe repeated.
 - No salt, sugar, honey, or whole nuts. Ghee and mild spices (cumin, turmeric, ajwain) are fine.
 - Only include foods appropriate for ${age.months} months old.
 - Diet: ${dietNote}
-- SOLID FOODS ONLY. NEVER suggest breast milk, formula, or any milk drink as a food or recipe ingredient. This is a solid food introduction plan — all slots must contain real solid foods.
+- SOLID FOODS ONLY. NEVER suggest breast milk, formula, or any milk drink as a food or recipe ingredient.
 
 Return ONLY valid JSON — no markdown fences, no explanation:
 {"days":[
@@ -1440,11 +1450,33 @@ ${dayTemplate}
 
   // Filter out any milk/formula suggestions the model may have hallucinated
   const milkPattern = /breast\s*milk|formula|milk\s*(feed|drink)|bottle\s*feed/i;
+  // ── 5-day rule enforcement: hero food must be the food name for all 7 days ──
+  // Build slotId → hero food name map for this week
+  const semToSlotId = {};
+  profile.slots.forEach((s, i) => {
+    const sem = i === 0 ? 'snack1' : i === 1 ? 'lunch' : 'snack2';
+    semToSlotId[sem] = s.id;
+  });
+  const heroMap = {}; // slotId → hero food name
+  for (const h of heroFoods) {
+    const sid = semToSlotId[h.slot];
+    if (sid && h.food) heroMap[sid] = h.food;
+  }
+  // Force hero food name on all 7 days; leave AI-generated recipe intact
+  for (const day of plan.days || []) {
+    for (const [slotId, meal] of Object.entries(day.meals || {})) {
+      if (heroMap[slotId]) {
+        meal.food = heroMap[slotId];
+      }
+    }
+  }
+
+  // ── Milk/formula filter ──────────────────────────────────────────────────────
   for (const day of plan.days || []) {
     for (const [slotId, meal] of Object.entries(day.meals || {})) {
       if (milkPattern.test(meal.food || '')) {
-        meal.food   = 'Mashed banana';
-        meal.recipe = 'Mash a ripe banana until smooth. Serve at room temperature.';
+        meal.food   = heroMap[slotId] || 'Mashed banana';
+        meal.recipe = 'Mash until smooth. Serve at room temperature.';
       }
       if (meal.recipe) {
         meal.recipe = meal.recipe.replace(/\s*with\s+(breast\s*milk|formula)[^.]*\./gi, '.');
