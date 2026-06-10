@@ -1373,18 +1373,9 @@ app.post('/api/appointments/:id/questions/:qid/move', (req, res) => {
 
 // ── Week plan generation helper ───────────────────────────────────────────────
 async function generateWeekPlan(month, week, profile) {
-  const age  = getBabyAge(profile);
-  const pr   = pronouns(profile);
-
-  const slotLabelMap = { snack1: profile.slots[0]?.label || 'Snack 1', lunch: profile.slots[1]?.label || 'Lunch', snack2: profile.slots[2]?.label || 'Snack 2' };
-  const roadmap  = loadRoadmap() || [];
-  const heroFoods = roadmap.filter(r => r.month === month && r.week === week);
-  const heroText  = heroFoods.length
-    ? heroFoods.map(r => `- ${r.food} (${slotLabelMap[r.slot] || r.slot}): ${r.tip}`).join('\n')
-    : '- Rotate previously-liked foods with minor variations';
-
-  const foodsTried  = rf(path.join(GORDON_DIR, 'FOODS-TRIED.md')) || 'None yet.';
-  const preferences = rf(path.join(GORDON_DIR, 'PREFERENCES.md')) || 'None yet.';
+  const age          = getBabyAge(profile);
+  const pr           = pronouns(profile);
+  const exposureDays = profile.exposureDays || 5;
 
   const dietMap = {
     'vegetarian':     'strict vegetarian, no eggs/meat/fish',
@@ -1392,106 +1383,150 @@ async function generateWeekPlan(month, week, profile) {
     'pescatarian':    'pescatarian — fish and eggs ok, no meat',
     'non-vegetarian': 'non-vegetarian, include eggs/chicken/fish when age-appropriate',
   };
-  const dietNote = dietMap[profile.dietary] || profile.dietary;
-  const slotsDesc = profile.slots.map(s => `"${s.id}" (${s.label} at ${s.time})`).join(', ');
+  const dietNote    = dietMap[profile.dietary] || profile.dietary;
+  const foodsTried  = rf(path.join(GORDON_DIR, 'FOODS-TRIED.md')) || 'None yet.';
+  const preferences = rf(path.join(GORDON_DIR, 'PREFERENCES.md')) || 'None yet.';
 
+  // ── Compute Monday of this plan week (mirrors frontend weekStartDate) ───────
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const dow = now.getDay();
+  const todayMonday = new Date(now);
+  todayMonday.setDate(now.getDate() - (dow === 0 ? 6 : dow - 1));
+
+  const curMonth   = Math.max(6, Math.min(12, age.months));
+  const curWeek    = Math.min(4, Math.floor(age.days / 7) + 1);
+  const curOverall = (curMonth - 6) * 4 + (curWeek - 1);
+  const tgtOverall = (month - 6)   * 4 + (week  - 1);
+  const planMonday = new Date(todayMonday);
+  planMonday.setDate(todayMonday.getDate() + (tgtOverall - curOverall) * 7);
+
+  // ── Solid start date = DOB + 6 months ───────────────────────────────────────
+  const dob = new Date(profile.dob + 'T00:00:00');
+  const solidStart = new Date(dob);
+  solidStart.setMonth(solidStart.getMonth() + 6);
+  solidStart.setHours(0, 0, 0, 0);
+
+  // ── Per-slot hero food sequences from roadmap (ordered chronologically) ─────
+  const roadmap = loadRoadmap() || [];
+  // Map slot position to roadmap semantic name
+  // slot 0 → snack1, slot 1 → lunch, slot 2+ → snack2 (roadmap only has 3 semantic names)
+  const semForSlot = i => i === 0 ? 'snack1' : i === 1 ? 'lunch' : 'snack2';
+  const slotSequences = profile.slots.map((slot, i) => {
+    const sem     = semForSlot(i);
+    const entries = roadmap
+      .filter(r => r.slot === sem && r.food)
+      .sort((a, b) => a.month !== b.month ? a.month - b.month : a.week - b.week);
+    return { slotId: slot.id, label: slot.label, sem, entries, staggerOffset: i };
+  });
+
+  // ── Compute per-day, per-slot schedule ──────────────────────────────────────
   const dayNames = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
-  const dayTemplate = dayNames.map(d =>
-    `{"day":"${d}","meals":{${profile.slots.map(s => `"${s.id}":{"food":"...","recipe":"..."}`).join(',')}}}`
-  ).join(',\n');
+  const schedule = dayNames.map((dayName, d) => {
+    const date = new Date(planMonday);
+    date.setDate(planMonday.getDate() + d);
+    const daysSinceSolids = Math.floor((date - solidStart) / 86400000);
 
-  const prompt = `You are Gordon, an expert Indian infant nutrition consultant. You are helping parents plan a full week of meals for ${profile.name} (${age.months} months ${age.days} days old, ${pr.pos} pronouns). Family is ${dietNote}.
+    const slots = slotSequences.map(({ slotId, label, entries, staggerOffset }) => {
+      const eff = daysSinceSolids - staggerOffset;
+      if (eff < 0 || entries.length === 0) {
+        return { slotId, label, food: null, tip: null, dayInCycle: null, totalDays: exposureDays };
+      }
+      const heroIdx    = Math.min(Math.floor(eff / exposureDays), entries.length - 1);
+      const dayInCycle = (eff % exposureDays) + 1;
+      return { slotId, label, food: entries[heroIdx].food, tip: entries[heroIdx].tip, dayInCycle, totalDays: exposureDays };
+    });
 
-This is Week ${week} of Month ${month} of introducing solids.
+    return { dayName, slots };
+  });
 
-HERO FOODS FOR THIS WEEK (one per slot — the NEW food being introduced this week):
-${heroText}
+  // ── Build flat recipe request — AI writes recipes only, never touches foods ─
+  // Identify rotation slots that need a food chosen by the AI
+  const rotationSlotIds = new Set();
+  for (const { slots } of schedule) {
+    for (const { slotId, food } of slots) {
+      if (!food) rotationSlotIds.add(slotId);
+    }
+  }
 
-FOODS ALREADY TRIED:
-${foodsTried}
+  // Build ordered list of (dayIdx, slotIdx) → {food, label, dayInCycle}
+  const cells = []; // flat list matching the order we'll ask AI to answer
+  for (let d = 0; d < schedule.length; d++) {
+    for (let s = 0; s < schedule[d].slots.length; s++) {
+      cells.push({ d, s, ...schedule[d].slots[s], dayName: schedule[d].dayName });
+    }
+  }
 
-PREFERENCES (likes/dislikes):
-${preferences}
+  const recipeLines = cells.map(({ dayName, label, food, tip, dayInCycle, totalDays }) => {
+    if (food) {
+      return `${dayName} / ${label}: ${food} — Day ${dayInCycle} of ${totalDays}. ${tip || 'Vary the preparation.'}`;
+    }
+    return `${dayName} / ${label}: ROTATION — pick one simple previously-tried food and describe it.`;
+  });
 
-MEAL SLOTS: ${slotsDesc}
+  const prompt = `You are Gordon, an expert Indian infant nutrition consultant for ${profile.name} (${age.months}m ${age.days}d, ${pr.pos} pronouns). Family: ${dietNote}.
 
-CRITICAL — 5-DAY INTRODUCTION RULE:
-Each hero food MUST appear in its slot for ALL 7 days of the week. Only the preparation and recipe change each day — the food name stays exactly the same. This is mandatory for allergy detection: a new food must be served consistently before the baby is considered tolerant.
+For each line below, write EXACTLY ONE recipe (max 2 sentences). Indian home kitchen. Vary preparation day-to-day for the same food.
+Rules: no salt, sugar, honey, whole nuts. Ghee and mild spices fine. NO breast milk or formula. Solid foods only.
+For ROTATION lines: pick one simple previously-tried food; use the SAME rotation food for all ROTATION lines in the same slot across the week.
 
-Example (if hero food for snack1 is "Mango"):
-  Monday snack1:    food="Mango", recipe="Mash ripe mango, serve plain."
-  Tuesday snack1:   food="Mango", recipe="Mash mango with a pinch of cardamom."
-  Wednesday snack1: food="Mango", recipe="Blend mango with cooked rice for a thicker texture."
-  ... and so on for all 7 days. NEVER switch to a different food mid-week for that slot.
+Return ONLY the answers — one recipe per line, same count and order as the input. No labels, no numbering.
 
-If a slot has NO hero food this week (rotation week), pick ONE previously-tried food the baby liked and use it consistently for all 7 days in that slot.
+${recipeLines.join('\n')}
 
-RULES:
-- Each recipe max 2 sentences. Practical, Indian home kitchen style.
-- Vary the PREPARATION each day — not the same recipe repeated.
-- No salt, sugar, honey, or whole nuts. Ghee and mild spices (cumin, turmeric, ajwain) are fine.
-- Only include foods appropriate for ${age.months} months old.
-- Diet: ${dietNote}
-- SOLID FOODS ONLY. NEVER suggest breast milk, formula, or any milk drink as a food or recipe ingredient.
-
-Return ONLY valid JSON — no markdown fences, no explanation:
-{"days":[
-${dayTemplate}
-]}`;
+FOODS TRIED: ${foodsTried}
+PREFERENCES: ${preferences}`;
 
   const result = await groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [{ role: 'user', content: prompt }],
     max_tokens: 2500, temperature: 0.3,
   });
-  let raw = result.choices[0].message.content.trim()
-    .replace(/^```json\s*/i,'').replace(/^```\s*/i,'').replace(/```\s*$/,'').trim();
-  const plan = JSON.parse(raw);
 
-  // Filter out any milk/formula suggestions the model may have hallucinated
+  const recipeAnswers = result.choices[0].message.content
+    .trim().split('\n').map(l => l.trim()).filter(Boolean);
+
+  // ── Assemble plan from server-side schedule + AI recipes ────────────────────
   const milkPattern = /breast\s*milk|formula|milk\s*(feed|drink)|bottle\s*feed/i;
-  // ── 5-day rule enforcement: hero food must be the food name for all 7 days ──
-  // Build slotId → hero food name map for this week
-  const semToSlotId = {};
-  profile.slots.forEach((s, i) => {
-    const sem = i === 0 ? 'snack1' : i === 1 ? 'lunch' : 'snack2';
-    semToSlotId[sem] = s.id;
-  });
-  const heroMap = {}; // slotId → hero food name
-  for (const h of heroFoods) {
-    const sid = semToSlotId[h.slot];
-    if (sid && h.food) heroMap[sid] = h.food;
-  }
-  // Force hero food name on all 7 days; leave AI-generated recipe intact
-  for (const day of plan.days || []) {
-    for (const [slotId, meal] of Object.entries(day.meals || {})) {
-      if (heroMap[slotId]) {
-        meal.food = heroMap[slotId];
-      }
-    }
-  }
+  const milkReplace = r => r
+    .replace(/\s*with\s+(breast\s*milk|formula)[^.]*\./gi, '.')
+    .replace(/breast\s*milk\s*(or\s*formula)?\s*/gi, 'water ')
+    .replace(/formula\s*/gi, 'water ');
 
-  // ── Milk/formula filter ──────────────────────────────────────────────────────
-  for (const day of plan.days || []) {
-    for (const [slotId, meal] of Object.entries(day.meals || {})) {
-      if (milkPattern.test(meal.food || '')) {
-        meal.food   = heroMap[slotId] || 'Mashed banana';
-        meal.recipe = 'Mash until smooth. Serve at room temperature.';
+  // For rotation slots, extract what food the AI picked from the first rotation answer
+  const rotationFoodForSlot = {}; // slotId → food name extracted from recipe text
+
+  const plan = {
+    days: schedule.map(({ dayName, slots }) => ({
+      day: dayName,
+      meals: Object.fromEntries(slots.map(({ slotId }) => [slotId, { food: '', recipe: '' }])),
+    })),
+  };
+
+  cells.forEach(({ d, s, slotId, food }, idx) => {
+    let recipe = recipeAnswers[idx] || 'Mash until smooth. Serve at room temperature.';
+    recipe = milkReplace(recipe);
+    if (milkPattern.test(recipe)) recipe = 'Mash until smooth. Serve at room temperature.';
+
+    let finalFood = food;
+    if (!food) {
+      // Extract food from recipe text for rotation, or use a safe default
+      if (!rotationFoodForSlot[slotId]) {
+        // Grab first 3 words of recipe as a food hint, or just label it "Rotation meal"
+        rotationFoodForSlot[slotId] = recipe.split(' ').slice(0, 3).join(' ').replace(/[.,]/, '') || 'Mashed banana';
       }
-      if (meal.recipe) {
-        meal.recipe = meal.recipe.replace(/\s*with\s+(breast\s*milk|formula)[^.]*\./gi, '.');
-        meal.recipe = meal.recipe.replace(/breast\s*milk\s*(or\s*formula)?\s*/gi, 'water ');
-        meal.recipe = meal.recipe.replace(/formula\s*/gi, 'water ');
-      }
+      finalFood = rotationFoodForSlot[slotId];
     }
-  }
+
+    plan.days[d].meals[slotId] = { food: finalFood, recipe };
+  });
 
   // Persist to WEEK-PLANS.json
   const plans = rj(WEEK_PLANS_PATH) || {};
   plans[`${month}-${week}`] = plan;
   wj(WEEK_PLANS_PATH, plans);
 
-  console.log(`[week-plan] Generated and cached month=${month} week=${week}`);
+  console.log(`[week-plan] Generated month=${month} week=${week} exposureDays=${exposureDays} slots=${profile.slots.length}`);
   return plan;
 }
 
