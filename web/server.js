@@ -1501,8 +1501,9 @@ app.patch('/api/week-plan/:month/:week/day/:dayIndex/slot/:slotId', (req, res) =
 // ── Profile & Settings ────────────────────────────────────────────────────────
 
 app.get('/api/profile', (req, res) => {
-  const p = loadProfile();
-  res.json({ name: p.name, dob: p.dob, gender: p.gender, slots: p.slots });
+  const raw = rj(PROFILE_PATH);
+  if (!raw?.dob) return res.json(null);
+  res.json({ name: raw.name, dob: raw.dob, gender: raw.gender, slots: raw.slots });
 });
 
 app.post('/api/profile', (req, res) => {
