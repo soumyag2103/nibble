@@ -237,7 +237,15 @@ Rules:
 Baby: ${p.name}, ${age.label} old, DOB: ${p.dob}`;
 }
 
-function buildUmaFraming(intent, pendingAction) {
+function buildUmaFraming(intent, pendingAction, profile) {
+  const p        = profile || loadProfile();
+  const age      = getBabyAge(p);
+  const curMonth = Math.max(6, Math.min(12, age.months));
+  const curWeek  = Math.min(4, Math.floor(age.days / 7) + 1);
+  const todayName    = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+  const todayIndex   = (new Date().getDay() + 6) % 7;
+  const slotOptions  = p.slots.map(s => `"${s.id}" = ${s.label}`).join(', ');
+
   const actionInstructions = {
     log_food: `
 When the parent clearly describes food that was eaten/tried, append this EXACT block at the end (after a blank line):
@@ -253,9 +261,12 @@ After answering, append the question to save:
 ACTION_JSON: {"action":"log_doctor_question","payload":{"question":"<concise question for the doctor>"}}`,
     update_week_plan: `
 When the parent asks to swap or change a food in the week plan, confirm the swap warmly and append:
-ACTION_JSON: {"action":"update_week_plan","payload":{"month":<month>,"week":<week>,"dayIndex":<0-6 Mon=0>,"slotId":"<slot_id>","food":"<new food name>","recipe":"<one sentence recipe>"}}
-Use the baby's current age to determine month and week. dayIndex: Monday=0, Tuesday=1, Wednesday=2, Thursday=3, Friday=4, Saturday=5, Sunday=6.
-Only emit if the parent clearly specifies which day or slot to change. If unclear, ask which meal to update first.`,
+ACTION_JSON: {"action":"update_week_plan","payload":{"month":${curMonth},"week":${curWeek},"dayIndex":<dayIndex>,"slotId":"<slotId>","food":"<new food name>","recipe":"<one sentence recipe>"}}
+IMPORTANT — use these exact values:
+- month: ${curMonth}, week: ${curWeek} (already computed from baby's age — do NOT change these)
+- dayIndex: today is ${todayName} = ${todayIndex}. Use this for today's meal, or 0=Mon 1=Tue 2=Wed 3=Thu 4=Fri 5=Sat 6=Sun for other days.
+- slotId: must be one of these exact strings — ${slotOptions}
+Only emit if the parent clearly specifies which slot to change. If unclear, ask which meal to update first.`,
     chat: '',
   };
 
@@ -619,7 +630,7 @@ app.post('/api/chat', async (req, res) => {
     bailey:   buildBaileyPrompt,
   };
   const systemPrompt = (promptBuilders[agent] || buildGordonPrompt)(profile)
-    + '\n\n' + buildUmaFraming(intent, pendingAction);
+    + '\n\n' + buildUmaFraming(intent, pendingAction, profile);
 
   const userMessage = pendingAction?.followUpStage === 'awaiting_details'
     ? `The parent earlier mentioned this milestone: "${pendingAction.payload?.milestone}". They now provide timing/notes: "${question}". Extract details and append ACTION_JSON.`
@@ -780,25 +791,34 @@ app.post('/api/log-doctor-question', (req, res) => {
 app.get('/api/variants/:food', async (req, res) => {
   const foodName = decodeURIComponent(req.params.food);
   const age      = getSaahitiAge();
-  const prompt   = `You are Gordon, expert in Indian vegetarian infant nutrition. Saahiti is ${age.months} months ${age.days} days old and just showed dislike for: ${foodName}.
+  const profile  = loadProfile();
+  const pr       = pronouns(profile);
+  const prompt   = `You are Gordon, expert in Indian infant nutrition. ${profile.name} is ${age.months} months ${age.days} days old. ${pr.sub} disliked: "${foodName}" today.
 
-Suggest exactly 5 variant preparations. Indian vegetarian context. Smooth to mashed textures.
-Avoid: honey, salt, sugar, whole nuts, pork.
+Suggest exactly 3 different ways to prepare or serve "${foodName}" that might taste better — keep the same base ingredient but vary the preparation, pairing, or texture. All suggestions must contain "${foodName}" or a key component of it.
 
-Return ONLY 5 lines, each in this format:
-VARIANT NAME | one-line description | texture (smooth/mashed/soft lumps)
+Age-appropriate textures for ${age.months} months: ${age.months <= 7 ? 'smooth puree or mash' : age.months <= 9 ? 'mashed or soft lumps' : 'soft lumps or finger food'}.
+Rules: No salt, sugar, honey, whole nuts. Ghee and mild Indian spices are fine. Indian home kitchen style.
 
-No intro text. No numbering. Just the 5 lines.`;
+Return ONLY 3 lines, each in this exact format:
+NAME | one-sentence prep description
+
+No intro text. No numbering. Just the 3 lines.`;
   try {
     const result = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
       messages: [{ role: 'user', content: prompt }],
       max_tokens: 400,
     });
+    const milkRx = /breast\s*milk(\s*or\s*formula)?|formula/gi;
     const lines    = result.choices[0].message.content.split('\n').filter(l => l.includes('|'));
     const variants = lines.map(l => {
       const p = l.split('|').map(x => x.trim());
-      return { name: p[0], description: p[1], texture: p[2] };
+      return {
+        name: p[0],
+        description: (p[1] || '').replace(milkRx, 'water'),
+        texture: p[2],
+      };
     }).filter(v => v.name);
     res.json(variants);
   } catch (e) {
@@ -1402,6 +1422,7 @@ RULES:
 - No salt, sugar, honey, or whole nuts. Ghee and mild spices (cumin, turmeric, ajwain) are fine.
 - Only include foods appropriate for ${age.months} months old.
 - Diet: ${dietNote}
+- SOLID FOODS ONLY. NEVER suggest breast milk, formula, or any milk drink as a food or recipe ingredient. This is a solid food introduction plan — all slots must contain real solid foods.
 
 Return ONLY valid JSON — no markdown fences, no explanation:
 {"days":[
@@ -1416,6 +1437,22 @@ ${dayTemplate}
   let raw = result.choices[0].message.content.trim()
     .replace(/^```json\s*/i,'').replace(/^```\s*/i,'').replace(/```\s*$/,'').trim();
   const plan = JSON.parse(raw);
+
+  // Filter out any milk/formula suggestions the model may have hallucinated
+  const milkPattern = /breast\s*milk|formula|milk\s*(feed|drink)|bottle\s*feed/i;
+  for (const day of plan.days || []) {
+    for (const [slotId, meal] of Object.entries(day.meals || {})) {
+      if (milkPattern.test(meal.food || '')) {
+        meal.food   = 'Mashed banana';
+        meal.recipe = 'Mash a ripe banana until smooth. Serve at room temperature.';
+      }
+      if (meal.recipe) {
+        meal.recipe = meal.recipe.replace(/\s*with\s+(breast\s*milk|formula)[^.]*\./gi, '.');
+        meal.recipe = meal.recipe.replace(/breast\s*milk\s*(or\s*formula)?\s*/gi, 'water ');
+        meal.recipe = meal.recipe.replace(/formula\s*/gi, 'water ');
+      }
+    }
+  }
 
   // Persist to WEEK-PLANS.json
   const plans = rj(WEEK_PLANS_PATH) || {};
@@ -1474,7 +1511,7 @@ app.get('/api/ensure-week-plan', async (req, res) => {
 });
 
 // PATCH /api/week-plan/:month/:week/day/:dayIndex/slot/:slotId — edit one cell in place
-app.patch('/api/week-plan/:month/:week/day/:dayIndex/slot/:slotId', (req, res) => {
+app.patch('/api/week-plan/:month/:week/day/:dayIndex/slot/:slotId', async (req, res) => {
   const month    = parseInt(req.params.month);
   const week     = parseInt(req.params.week);
   const dayIndex = parseInt(req.params.dayIndex);
@@ -1483,9 +1520,19 @@ app.patch('/api/week-plan/:month/:week/day/:dayIndex/slot/:slotId', (req, res) =
 
   if (!food) return res.status(400).json({ error: 'food required' });
 
-  const plans = rj(WEEK_PLANS_PATH) || {};
-  const plan  = plans[`${month}-${week}`];
-  if (!plan) return res.status(404).json({ error: 'plan not found' });
+  let plans = rj(WEEK_PLANS_PATH) || {};
+  let plan  = plans[`${month}-${week}`];
+
+  // Auto-generate if plan missing (don't 404 on valid month/week)
+  if (!plan) {
+    try {
+      plan = await generateWeekPlan(month, week, loadProfile());
+      plans = rj(WEEK_PLANS_PATH) || {};
+    } catch(e) {
+      return res.status(500).json({ error: 'plan not found and could not generate: ' + e.message });
+    }
+  }
+
   if (!plan.days[dayIndex]) return res.status(404).json({ error: 'day not found' });
   if (!plan.days[dayIndex].meals[slotId]) plan.days[dayIndex].meals[slotId] = {};
 
